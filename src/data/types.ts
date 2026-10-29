@@ -1,14 +1,24 @@
+export interface TaskGitHubLink {
+	repo: string;
+	type: "issue" | "pull_request";
+	number: number;
+	url: string;
+	state: string;
+	updatedAt: string;
+}
+
 export interface Task {
 	id: string;
 	title: string;
 	description: string;
 	createdAt: number;
 	updatedAt: number;
-	/** Agent-created task metadata. */
-	source?: "agent";
+	/** Source metadata for external imports. */
+	source?: "agent" | "github";
 	sourceProposalId?: string;
 	sourceRunId?: string;
 	sourceTaskId?: string;
+	github?: TaskGitHubLink;
 	/** Added by svelte-dnd-action while a drag is in progress. */
 	isDndShadowItem?: boolean;
 }
@@ -64,6 +74,12 @@ export interface BoardFile extends Board {
 export type TaskPatch = Partial<
 	Pick<
 		Task,
-		"title" | "description" | "source" | "sourceProposalId" | "sourceRunId" | "sourceTaskId"
+		| "title"
+		| "description"
+		| "source"
+		| "sourceProposalId"
+		| "sourceRunId"
+		| "sourceTaskId"
+		| "github"
 	>
 >;

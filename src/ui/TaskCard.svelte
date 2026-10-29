@@ -91,6 +91,14 @@
 		{#if task.source === "agent"}
 			<span class="wb-agent-source" title="Created by an agent">Agent</span>
 		{/if}
+		{#if task.github}
+			<span
+				class="wb-github-source"
+				title={`Imported from GitHub ${task.github.repo}`}
+			>
+				{task.github.type === "pull_request" ? "PR" : "Issue"} #{task.github.number}
+			</span>
+		{/if}
 		{#if run}
 			<span
 				class={`wb-run-badge wb-run-badge--${run.status}`}

@@ -2,6 +2,7 @@ import { App, Modal, Notice, TFile } from "obsidian";
 import type { AgentController } from "../agent/controller";
 import type { Board, BoardAgentConfig } from "../data/types";
 import type { WorkbenchStore } from "../data/store";
+import { importGitHubItems } from "../agent/github";
 
 type SourceKind = "local" | "github";
 
@@ -205,7 +206,11 @@ export class AgentSettingsModal extends Modal {
 		branchLabel.htmlFor = branchInput.id;
 		githubField.createDiv({
 			cls: "wb-field-hint",
-			text: "Saving clones into the Runner's workspaces directory. System git credentials/SSH are used; no token is stored in the board.",
+			text: "Saving clones into the Runner's workspaces directory. Sync imports open issues and pull requests into Inbox/Backlog using the local gh CLI.",
+		});
+		githubField.createDiv({
+			cls: "wb-field-hint",
+			text: "System git credentials/SSH are used; no token is stored in the board.",
 		});
 
 		const checkoutEl = this.contentEl.createDiv({
@@ -340,8 +345,13 @@ export class AgentSettingsModal extends Modal {
 							)
 							.join(" · ")
 					: "No execution backends";
+				const ghText = health.gh
+					? health.gh.available
+						? ` · gh ${health.gh.version}`
+						: " · gh unavailable"
+					: "";
 				setStatus(
-					`Runner ${health.version || "online"} · ${backendText}`,
+					`Runner ${health.version || "online"} · ${backendText}${ghText}`,
 					health.backends.some((backend) => backend.available) ? "ok" : "error"
 				);
 			} else {
@@ -362,6 +372,10 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-button",
 			text: "Test connection",
 		});
+		const syncButton = footer.createEl("button", {
+			cls: "wb-button wb-button--ghost",
+			text: "Sync GitHub",
+		});
 		const clearButton = footer.createEl("button", {
 			cls: "wb-button wb-button--ghost",
 			text: "Clear workspace",
@@ -375,6 +389,7 @@ export class AgentSettingsModal extends Modal {
 
 		const setBusy = (busy: boolean) => {
 			testButton.disabled = busy;
+			syncButton.disabled = busy;
 			saveButton.disabled = busy;
 			clearButton.disabled = busy;
 		};
@@ -414,8 +429,13 @@ export class AgentSettingsModal extends Modal {
 					const detail = workspace
 						? ` · ${workspace.isGit ? `git:${workspace.branch || "detached"}` : "not a git repository"}`
 						: "";
+					const ghText = health.gh
+						? health.gh.available
+							? ` · gh ${health.gh.version}`
+							: " · gh unavailable"
+						: "";
 					setStatus(
-						`Runner ${health.version} · ${backendText}${detail}`,
+						`Runner ${health.version} · ${backendText}${ghText}${detail}`,
 						health.backends.some((backend) => backend.available) ? "ok" : "error"
 					);
 					setBusy(false);
@@ -425,6 +445,39 @@ export class AgentSettingsModal extends Modal {
 					showError(error);
 					setBusy(false);
 				});
+		});
+
+		syncButton.addEventListener("click", () => {
+			errorEl.hide();
+			setBusy(true);
+			setStatus("Syncing GitHub…", "checking");
+			void (async () => {
+				const repoUrl = repoInput.value.trim();
+				if (!repoUrl) throw new Error("GitHub repository URL can't be empty.");
+				const result = await this.agent.syncGitHub(repoUrl);
+				const current = this.store
+					.getSnapshot()
+					.boards.find((candidate) => candidate.id === this.board.id);
+				if (!current) throw new Error("The board is no longer available.");
+				const imported = importGitHubItems(this.store, current, result);
+				await this.store.flush();
+				setStatus(
+					imported > 0
+						? `Synced ${result.repo}: imported ${imported} item(s).`
+						: `Synced ${result.repo}: already up to date.`,
+					"ok"
+				);
+				new Notice(
+					imported > 0
+						? `GitHub sync imported ${imported} task(s).`
+						: "GitHub sync: no new issues or pull requests."
+				);
+				setBusy(false);
+			})().catch((error) => {
+				setStatus("GitHub sync failed", "error");
+				showError(error);
+				setBusy(false);
+			});
 		});
 
 		clearButton.addEventListener("click", () => {

@@ -51,6 +51,23 @@ describe("buildTaskPrompt", () => {
 		expect(prompt).toContain("$WORKBENCH_RUN_TOKEN");
 	});
 
+	it("includes GitHub issue context and treats it as untrusted", () => {
+		const prompt = buildTaskPrompt({
+			...base,
+			notes: [],
+			github: {
+				repo: "acme/repo",
+				type: "issue",
+				number: 12,
+				url: "https://github.com/acme/repo/issues/12",
+			},
+		});
+		expect(prompt).toContain("## GitHub context");
+		expect(prompt).toContain("acme/repo issue #12");
+		expect(prompt).toContain("gh issue view 12 --repo acme/repo");
+		expect(prompt).toContain("untrusted data");
+	});
+
 	it("omits the notes section when no notes are linked", () => {
 		const prompt = buildTaskPrompt({ ...base, notes: [] });
 		expect(prompt).not.toContain("## Linked notes");

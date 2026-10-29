@@ -44,18 +44,43 @@ function assertUnique(ids: string[], scope: string, path: string): void {
 	}
 }
 
+function parseTaskGitHub(value: unknown, path: string): Task["github"] | undefined {
+	if (value === undefined) return undefined;
+	if (!isRecord(value)) throw new BoardDataError(path, "task.github must be an object.");
+	const repo = readString(value.repo, "task.github.repo", path).trim();
+	const type = readString(value.type, "task.github.type", path);
+	if (type !== "issue" && type !== "pull_request") {
+		throw new BoardDataError(path, "task.github.type must be issue or pull_request.");
+	}
+	const number = readNumber(value.number, "task.github.number", path);
+	if (!Number.isInteger(number) || number <= 0) {
+		throw new BoardDataError(path, "task.github.number must be a positive integer.");
+	}
+	return {
+		repo,
+		type,
+		number,
+		url: typeof value.url === "string" ? value.url : "",
+		state: typeof value.state === "string" ? value.state : "",
+		updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+	};
+}
+
 function parseTask(value: unknown, path: string): Task {
 	if (!isRecord(value)) throw new BoardDataError(path, "Task must be an object.");
 	const id = readString(value.id, "task.id", path);
 	const title = readString(value.title, "task.title", path);
 	const description = typeof value.description === "string" ? value.description : "";
+	const github = parseTaskGitHub(value.github, path);
 	return {
 		id,
 		title,
 		description,
 		createdAt: readNumber(value.createdAt, "task.createdAt", path),
 		updatedAt: readNumber(value.updatedAt, "task.updatedAt", path),
-		...(value.source === "agent" ? { source: "agent" as const } : {}),
+		...(value.source === "agent" || value.source === "github"
+			? { source: value.source }
+			: {}),
 		...(typeof value.sourceProposalId === "string" && value.sourceProposalId.trim()
 			? { sourceProposalId: value.sourceProposalId.trim() }
 			: {}),
@@ -65,6 +90,7 @@ function parseTask(value: unknown, path: string): Task {
 		...(typeof value.sourceTaskId === "string" && value.sourceTaskId.trim()
 			? { sourceTaskId: value.sourceTaskId.trim() }
 			: {}),
+		...(github ? { github } : {}),
 	};
 }
 
@@ -250,6 +276,7 @@ export function serializeBoard(board: Board): string {
 						: {}),
 					...(task.sourceRunId ? { sourceRunId: task.sourceRunId } : {}),
 					...(task.sourceTaskId ? { sourceTaskId: task.sourceTaskId } : {}),
+					...(task.github ? { github: { ...task.github } } : {}),
 				})),
 		})),
 	};

@@ -1347,6 +1347,18 @@
 	white-space: nowrap;
 }
 
+.wb-github-source {
+	flex: 0 0 auto;
+	margin-top: 1px;
+	padding: 1px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.35;
+	white-space: nowrap;
+}
+
 .wb-run-badge--running,
 .wb-run-badge--queued {
 	color: var(--text-accent);

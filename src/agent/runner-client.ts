@@ -2,6 +2,7 @@ import { requestUrl } from "obsidian";
 import type {
 	AgentSettings,
 	GitHubWorkspaceInfo,
+	GitHubSyncResult,
 	RunnerHealth,
 	RunnerPage,
 	RunnerRun,
@@ -93,6 +94,10 @@ export class RunnerClient {
 		branch: string;
 	}): Promise<GitHubWorkspaceInfo> {
 		return this.request<GitHubWorkspaceInfo>("POST", "/workspace/github", input);
+	}
+
+	syncGitHub(repoUrl: string): Promise<GitHubSyncResult> {
+		return this.request<GitHubSyncResult>("POST", "/github/sync", { repoUrl });
 	}
 
 	startRun(input: {

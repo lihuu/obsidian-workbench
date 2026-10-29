@@ -53,6 +53,24 @@ describe("board schema", () => {
 		expect(parsed).toEqual(board);
 	});
 
+	it("round-trips imported GitHub task metadata", () => {
+		const board = makeBoard();
+		board.columns[0].tasks[0] = {
+			...board.columns[0].tasks[0],
+			source: "github",
+			github: {
+				repo: "acme/repo",
+				type: "pull_request",
+				number: 42,
+				url: "https://github.com/acme/repo/pull/42",
+				state: "OPEN",
+				updatedAt: "2026-10-29T00:00:00Z",
+			},
+		};
+		const parsed = parseBoard(serializeBoard(board), "Workbench/boards/b_abc123.json");
+		expect(parsed).toEqual(board);
+	});
+
 	it("strips transient drag state when serializing", () => {
 		const board = makeBoard();
 		board.columns[0].tasks.push({

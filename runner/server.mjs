@@ -8,7 +8,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { createJsonlDecoder } from "./protocol.mjs";
 import { RunSession, isTerminalStatus } from "./run-state.mjs";
-import { checkoutPath, expandHome, parseGitHubRepo } from "./workspace.mjs";
+import { parseGitHubRepo, checkoutPath, expandHome } from "./workspace.mjs";
+import { checkGh, syncGitHub } from "./github.mjs";
 import { branchForRun, isCleanStatus, worktreePath } from "./worktree.mjs";
 import { pickNextQueued, reorderPending } from "./queue.mjs";
 import { createBackendRegistry } from "./backends/index.mjs";
@@ -784,6 +785,7 @@ async function handleRequest(req, res) {
 			version: RUNNER_VERSION,
 			backends: backendHealth,
 			defaultBackend: backends.defaultId,
+			gh: checkGh(),
 			pi,
 			activeRuns,
 			runningRuns: processes.size,
@@ -808,6 +810,28 @@ async function handleRequest(req, res) {
 	if (req.method === "POST" && pathname === "/workspace/github") {
 		const body = await readJson(req);
 		json(res, 200, await cloneGitHub(body));
+		return;
+	}
+
+	if (req.method === "POST" && pathname === "/github/sync") {
+		const body = await readJson(req);
+		const repoUrl = readString(body.repoUrl, "repoUrl", 2_000).trim();
+		const parsed = parseGitHubRepo(repoUrl);
+		if (!parsed) {
+			throw new HttpError(400, "Only GitHub HTTPS or SSH repository URLs are supported.");
+		}
+		try {
+			const result = await syncGitHub(parsed);
+			json(res, 200, result);
+		} catch (error) {
+			const message =
+				error && typeof error === "object" && typeof error.stderr === "string"
+					? error.stderr.trim()
+					: error instanceof Error
+						? error.message
+						: String(error);
+			throw new HttpError(502, `GitHub CLI sync failed: ${message.slice(0, 2_000)}`);
+		}
 		return;
 	}
 

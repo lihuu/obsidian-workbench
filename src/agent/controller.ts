@@ -18,6 +18,7 @@ import {
 import type {
 	AgentSettings,
 	AgentSnapshot,
+	GitHubSyncResult,
 	RunEvent,
 	RunnerHealth,
 	RunnerPage,
@@ -51,6 +52,7 @@ function createInitialSnapshot(settings: AgentSettings): AgentSnapshot {
 			pi: null,
 			backends: [],
 			defaultBackend: "",
+			gh: null,
 			version: "",
 		},
 	};
@@ -134,6 +136,7 @@ export class AgentController implements Readable<AgentSnapshot> {
 					pi: health.pi,
 					backends: health.backends ?? [],
 					defaultBackend: health.defaultBackend ?? "pi",
+					gh: health.gh ?? null,
 					version: health.version,
 				});
 			} catch (error) {
@@ -185,6 +188,10 @@ export class AgentController implements Readable<AgentSnapshot> {
 		const workspace = await this.client.cloneGitHub({ boardId, repoUrl, branch });
 		await this.setWorkspace(boardId, workspace.path);
 		return workspace;
+	}
+
+	async syncGitHub(repoUrl: string): Promise<GitHubSyncResult> {
+		return this.client.syncGitHub(repoUrl);
 	}
 
 	async setWorkspace(boardId: string, path: string): Promise<void> {
@@ -469,6 +476,7 @@ export class AgentController implements Readable<AgentSnapshot> {
 				workspacePath: workspace,
 				notes,
 				imageNames: images.map((image) => image.name),
+				github: task.github,
 			}),
 			images,
 			noteCount: notes.length,

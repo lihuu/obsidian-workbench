@@ -109,6 +109,35 @@ credentials and SSH agents are used; tokens are never written into the board.
 The repository URL and branch sync with the board. The checkout path and Runner
 connection stay on this device. Local folder paths also stay on this device.
 
+### GitHub issues and pull requests
+
+The Runner can import open GitHub issues and pull requests through the locally
+authenticated `gh` CLI. It does not use the GitHub API directly and does not
+store a GitHub token in the board.
+
+```bash
+gh auth status
+```
+
+In **Agent → GitHub repository**, click **Sync GitHub**. The import is one-way:
+
+```text
+GitHub issues / PRs → Workbench tasks
+```
+
+- Open issues and pull requests are imported into Inbox, then Backlog, then the
+  first column.
+- Imported tasks show an `Issue #123` or `PR #123` badge and store the repo,
+  number, URL, state, and updated time.
+- Re-running sync is idempotent; existing repo/type/number links are skipped.
+- GitHub titles/bodies/labels are imported into the task description.
+- Closing, commenting, or updating GitHub is not done by the sync. Agents can
+  use `gh` explicitly for those operations when a task asks for it.
+- The Runner exposes `GET /health` with `gh` availability/version and
+  `POST /github/sync` with `{ repoUrl }`.
+- The GitHub API rate limit applies to `gh`; initial sync requests at most 100
+  open issues and 100 open pull requests.
+
 ### Worktree mode
 
 When enabled, each run gets a separate Git worktree and branch:
@@ -346,6 +375,7 @@ on live state transitions, not when loading old history.
 GET  /health
 POST /workspace          { path }
 POST /workspace/github   { boardId, repoUrl, branch }
+POST /github/sync        { repoUrl }  (uses local gh auth)
 POST /runs               { boardId, taskId, title, prompt, cwd, backend?, images?, worktree? }  -> queued/running
 GET  /runs?boardId=...&taskId=...&limit=...
 GET  /runs/:id?after=N
