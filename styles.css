@@ -563,6 +563,23 @@
 	overflow-y: auto;
 }
 
+.wb-agent-modal {
+	display: flex;
+	flex-direction: column;
+}
+
+.wb-agent-modal .wb-modal-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: none;
+}
+
+.wb-agent-modal > .wb-modal-footer {
+	flex: 0 0 auto;
+	padding: var(--size-4-3) var(--size-4-6) var(--size-4-4);
+	background: var(--background-primary);
+}
+
 .wb-field {
 	display: flex;
 	flex-direction: column;

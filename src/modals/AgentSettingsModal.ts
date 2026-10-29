@@ -24,6 +24,7 @@ export class AgentSettingsModal extends Modal {
 	onOpen(): void {
 		this.setTitle("Workbench agent");
 		this.modalEl.addClass("wb-modal");
+		this.modalEl.addClass("wb-agent-modal");
 		this.contentEl.addClass("wb-modal-content");
 		this.contentEl.empty();
 
@@ -516,7 +517,7 @@ export class AgentSettingsModal extends Modal {
 			void this.agent.refreshHealth().then(() => showHealth(this.agent.getSnapshot().health));
 		}
 
-		const footer = this.contentEl.createDiv({ cls: "wb-modal-footer" });
+		const footer = this.modalEl.createDiv({ cls: "wb-modal-footer" });
 		const helpButton = footer.createEl("button", {
 			cls: "wb-button wb-button--ghost",
 			text: "Help",
