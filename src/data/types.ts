@@ -1,3 +1,5 @@
+import type { GitHubChecks } from "../agent/types";
+
 export interface TaskGitHubLink {
 	repo: string;
 	type: "issue" | "pull_request";
@@ -5,6 +7,18 @@ export interface TaskGitHubLink {
 	url: string;
 	state: string;
 	updatedAt: string;
+	title?: string;
+	author?: string;
+	labels?: string[];
+	isDraft?: boolean;
+	headRefName?: string;
+	baseRefName?: string;
+	reviewDecision?: string | null;
+	mergedAt?: string | null;
+	closedAt?: string | null;
+	checks?: GitHubChecks;
+	/** Hash of the last generated description, used to preserve local edits. */
+	descriptionHash?: string;
 }
 
 export interface Task {

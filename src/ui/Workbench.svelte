@@ -342,7 +342,14 @@
 				}
 				store.deleteTask(board.id, task.id);
 			},
-			(run) => moveTaskForRun(board, run)
+			(run) => moveTaskForRun(board, run),
+			() => {
+				const done =
+					board.columns.find(
+						(column) => column.name.trim().toLowerCase() === "done"
+					) ?? board.columns[board.columns.length - 1];
+				if (done) store.moveTask(board.id, task.id, done.id);
+			}
 		).open();
 	}
 

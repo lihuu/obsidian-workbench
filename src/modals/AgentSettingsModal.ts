@@ -2,7 +2,7 @@ import { App, Modal, Notice, TFile } from "obsidian";
 import type { AgentController } from "../agent/controller";
 import type { Board, BoardAgentConfig } from "../data/types";
 import type { WorkbenchStore } from "../data/store";
-import { importGitHubItems } from "../agent/github";
+import { collectGitHubRefs, importGitHubItems } from "../agent/github";
 
 type SourceKind = "local" | "github";
 
@@ -26,6 +26,7 @@ export class AgentSettingsModal extends Modal {
 		const settings = snapshot.settings;
 		const github = this.board.agent?.github;
 		let source: SourceKind = github ? "github" : "local";
+		let syncButton: HTMLButtonElement | undefined;
 
 		this.contentEl.createDiv({
 			cls: "wb-agent-intro",
@@ -225,6 +226,7 @@ export class AgentSettingsModal extends Modal {
 		const updateVisibility = () => {
 			localField.hidden = source !== "local";
 			githubField.hidden = source !== "github";
+			if (syncButton) syncButton.hidden = source !== "github";
 		};
 		sourceSelect.addEventListener("change", () => {
 			source = sourceSelect.value === "github" ? "github" : "local";
@@ -372,10 +374,12 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-button",
 			text: "Test connection",
 		});
-		const syncButton = footer.createEl("button", {
+		const syncButtonEl = footer.createEl("button", {
 			cls: "wb-button wb-button--ghost",
 			text: "Sync GitHub",
 		});
+		syncButton = syncButtonEl;
+		updateVisibility();
 		const clearButton = footer.createEl("button", {
 			cls: "wb-button wb-button--ghost",
 			text: "Clear workspace",
@@ -389,7 +393,7 @@ export class AgentSettingsModal extends Modal {
 
 		const setBusy = (busy: boolean) => {
 			testButton.disabled = busy;
-			syncButton.disabled = busy;
+			syncButtonEl.disabled = busy;
 			saveButton.disabled = busy;
 			clearButton.disabled = busy;
 		};
@@ -454,23 +458,31 @@ export class AgentSettingsModal extends Modal {
 			void (async () => {
 				const repoUrl = repoInput.value.trim();
 				if (!repoUrl) throw new Error("GitHub repository URL can't be empty.");
-				const result = await this.agent.syncGitHub(repoUrl);
 				const current = this.store
 					.getSnapshot()
 					.boards.find((candidate) => candidate.id === this.board.id);
 				if (!current) throw new Error("The board is no longer available.");
-				const imported = importGitHubItems(this.store, current, result);
+				const result = await this.agent.syncGitHub(
+					repoUrl,
+					collectGitHubRefs(current)
+				);
+				const summary = importGitHubItems(this.store, current, result);
 				await this.store.flush();
+				const parts = [
+					summary.imported > 0 ? `imported ${summary.imported}` : "",
+					summary.updated > 0 ? `updated ${summary.updated}` : "",
+					summary.moved > 0 ? `moved ${summary.moved} to Done` : "",
+				].filter(Boolean);
 				setStatus(
-					imported > 0
-						? `Synced ${result.repo}: imported ${imported} item(s).`
+					parts.length > 0
+						? `Synced ${result.repo}: ${parts.join(", ")}.`
 						: `Synced ${result.repo}: already up to date.`,
 					"ok"
 				);
 				new Notice(
-					imported > 0
-						? `GitHub sync imported ${imported} task(s).`
-						: "GitHub sync: no new issues or pull requests."
+					parts.length > 0
+						? `GitHub sync: ${parts.join(", ")}.`
+						: "GitHub sync: no changes."
 				);
 				setBusy(false);
 			})().catch((error) => {

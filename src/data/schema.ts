@@ -1,3 +1,4 @@
+import type { GitHubChecks } from "../agent/types";
 import type {
 	Board,
 	BoardAgentConfig,
@@ -56,6 +57,24 @@ function parseTaskGitHub(value: unknown, path: string): Task["github"] | undefin
 	if (!Number.isInteger(number) || number <= 0) {
 		throw new BoardDataError(path, "task.github.number must be a positive integer.");
 	}
+	const labels = Array.isArray(value.labels)
+		? value.labels.filter((label): label is string => typeof label === "string")
+		: undefined;
+	const checks: GitHubChecks | undefined = isRecord(value.checks)
+		? {
+				state:
+					value.checks.state === "success" ||
+					value.checks.state === "failure" ||
+					value.checks.state === "pending" ||
+					value.checks.state === "none"
+						? value.checks.state
+						: "none",
+				total: typeof value.checks.total === "number" ? value.checks.total : 0,
+				success: typeof value.checks.success === "number" ? value.checks.success : 0,
+				failure: typeof value.checks.failure === "number" ? value.checks.failure : 0,
+				pending: typeof value.checks.pending === "number" ? value.checks.pending : 0,
+			}
+		: undefined;
 	return {
 		repo,
 		type,
@@ -63,6 +82,29 @@ function parseTaskGitHub(value: unknown, path: string): Task["github"] | undefin
 		url: typeof value.url === "string" ? value.url : "",
 		state: typeof value.state === "string" ? value.state : "",
 		updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+		...(typeof value.title === "string" ? { title: value.title } : {}),
+		...(typeof value.author === "string" ? { author: value.author } : {}),
+		...(labels ? { labels } : {}),
+		...(typeof value.isDraft === "boolean" ? { isDraft: value.isDraft } : {}),
+		...(typeof value.headRefName === "string"
+			? { headRefName: value.headRefName }
+			: {}),
+		...(typeof value.baseRefName === "string"
+			? { baseRefName: value.baseRefName }
+			: {}),
+		...(typeof value.reviewDecision === "string" || value.reviewDecision === null
+			? { reviewDecision: value.reviewDecision }
+			: {}),
+		...(typeof value.mergedAt === "string" || value.mergedAt === null
+			? { mergedAt: value.mergedAt }
+			: {}),
+		...(typeof value.closedAt === "string" || value.closedAt === null
+			? { closedAt: value.closedAt }
+			: {}),
+		...(checks ? { checks } : {}),
+		...(typeof value.descriptionHash === "string"
+			? { descriptionHash: value.descriptionHash }
+			: {}),
 	};
 }
 

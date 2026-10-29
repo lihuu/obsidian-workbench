@@ -111,7 +111,7 @@ connection stay on this device. Local folder paths also stay on this device.
 
 ### GitHub issues and pull requests
 
-The Runner can import open GitHub issues and pull requests through the locally
+The Runner links GitHub issues and pull requests through the locally
 authenticated `gh` CLI. It does not use the GitHub API directly and does not
 store a GitHub token in the board.
 
@@ -119,7 +119,7 @@ store a GitHub token in the board.
 gh auth status
 ```
 
-In **Agent → GitHub repository**, click **Sync GitHub**. The import is one-way:
+In **Agent → GitHub repository**, click **Sync GitHub**. The sync is one-way:
 
 ```text
 GitHub issues / PRs → Workbench tasks
@@ -127,16 +127,33 @@ GitHub issues / PRs → Workbench tasks
 
 - Open issues and pull requests are imported into Inbox, then Backlog, then the
   first column.
-- Imported tasks show an `Issue #123` or `PR #123` badge and store the repo,
-  number, URL, state, and updated time.
-- Re-running sync is idempotent; existing repo/type/number links are skipped.
-- GitHub titles/bodies/labels are imported into the task description.
-- Closing, commenting, or updating GitHub is not done by the sync. Agents can
-  use `gh` explicitly for those operations when a task asks for it.
-- The Runner exposes `GET /health` with `gh` availability/version and
-  `POST /github/sync` with `{ repoUrl }`.
-- The GitHub API rate limit applies to `gh`; initial sync requests at most 100
-  open issues and 100 open pull requests.
+- Imported tasks show an `Issue #123` / `PR #123` badge plus state, check, and
+  review badges.
+- Re-running sync updates existing repo/type/number links instead of creating
+  duplicates.
+- Local title and description edits are preserved. Remote titles only replace a
+  title that still matches the previous synced title; the generated body only
+  refreshes when its hash still matches the last generated description.
+- Closed issues and merged PRs linked to tasks are fetched even when they are
+  outside the open-list window. Merged PRs and closed issues move to **Done**
+  (or the last column) automatically.
+- PRs store `reviewDecision` and normalized check counts: passing, failing,
+  pending, or none.
+- GitHub titles/bodies/labels are imported into the task description; the task
+  detail shows metadata and actions.
+- **Comment** and **Close issue/PR** call `gh` through the local Runner. Merge,
+  reopen, labels, and review submission are not exposed yet. Agents can use
+  `gh` explicitly for other operations.
+- **Open in browser** uses Obsidian's Web viewer when available, otherwise the
+  system browser. To enable the built-in browser manually, turn on
+  **Settings → Core plugins → Web viewer**, then run
+  **Web viewer: Open web viewer** from the command palette or call
+  `webviewer:open`.
+- The Runner exposes `GET /health` with `gh` availability/version,
+  `POST /github/sync` with `{ repoUrl, refs? }`,
+  `POST /github/comment`, and `POST /github/close`.
+- The GitHub API rate limit applies to `gh`; each list pass requests at most 100
+  open issues and 100 open pull requests. Linked `refs` are capped at 200.
 
 ### Worktree mode
 
@@ -375,7 +392,9 @@ on live state transitions, not when loading old history.
 GET  /health
 POST /workspace          { path }
 POST /workspace/github   { boardId, repoUrl, branch }
-POST /github/sync        { repoUrl }  (uses local gh auth)
+POST /github/sync        { repoUrl, refs? }  (uses local gh auth)
+POST /github/comment     { repoUrl, type, number, body }
+POST /github/close       { repoUrl, type, number }
 POST /runs               { boardId, taskId, title, prompt, cwd, backend?, images?, worktree? }  -> queued/running
 GET  /runs?boardId=...&taskId=...&limit=...
 GET  /runs/:id?after=N

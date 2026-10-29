@@ -60,6 +60,8 @@ describe("buildTaskPrompt", () => {
 				type: "issue",
 				number: 12,
 				url: "https://github.com/acme/repo/issues/12",
+				state: "OPEN",
+				updatedAt: "2026-10-29T00:00:00Z",
 			},
 		});
 		expect(prompt).toContain("## GitHub context");

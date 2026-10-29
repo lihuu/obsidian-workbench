@@ -18,6 +18,8 @@ import {
 import type {
 	AgentSettings,
 	AgentSnapshot,
+	GitHubActionResult,
+	GitHubSyncRef,
 	GitHubSyncResult,
 	RunEvent,
 	RunnerHealth,
@@ -190,8 +192,28 @@ export class AgentController implements Readable<AgentSnapshot> {
 		return workspace;
 	}
 
-	async syncGitHub(repoUrl: string): Promise<GitHubSyncResult> {
-		return this.client.syncGitHub(repoUrl);
+	async syncGitHub(
+		repoUrl: string,
+		refs: GitHubSyncRef[] = []
+	): Promise<GitHubSyncResult> {
+		return this.client.syncGitHub(repoUrl, refs);
+	}
+
+	async commentGitHub(
+		repoUrl: string,
+		type: "issue" | "pull_request",
+		number: number,
+		body: string
+	): Promise<GitHubActionResult> {
+		return this.client.commentGitHub(repoUrl, type, number, body);
+	}
+
+	async closeGitHub(
+		repoUrl: string,
+		type: "issue" | "pull_request",
+		number: number
+	): Promise<GitHubActionResult> {
+		return this.client.closeGitHub(repoUrl, type, number);
 	}
 
 	async setWorkspace(boardId: string, path: string): Promise<void> {
