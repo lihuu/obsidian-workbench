@@ -15,7 +15,7 @@ const vault = resolve(
 const pluginDir = join(vault, ".obsidian", "plugins", "workbench");
 
 await mkdir(pluginDir, { recursive: true });
-for (const file of ["main.js", "manifest.json", "styles.css", "README.md"]) {
+for (const file of ["main.js", "runner.cjs", "manifest.json", "styles.css", "README.md"]) {
 	await copyFile(file, join(pluginDir, file));
 }
 console.log(`Deployed Workbench to ${pluginDir}`);

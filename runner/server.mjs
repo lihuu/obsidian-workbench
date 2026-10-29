@@ -1178,32 +1178,87 @@ const server = http.createServer((req, res) => {
 	});
 });
 
-await fsp.mkdir(SESSIONS_DIR, { recursive: true }).catch(() => undefined);
-await fsp.mkdir(WORKSPACES_DIR, { recursive: true }).catch(() => undefined);
-await loadHistory();
+let startPromise = null;
 
-server.listen(PORT, HOST, () => {
-	console.log(`[workbench-runner] listening on http://${HOST}:${PORT}`);
-	for (const health of backends.health()) {
-		console.log(
-			health.available
-				? `[workbench-runner] ${health.id} ${health.version} (${health.binary})`
-				: `[workbench-runner] ${health.id} unavailable: ${health.error}`
-		);
-	}
-	console.log(`[workbench-runner] default backend: ${backends.defaultId}`);
-});
+export function startRunner() {
+	if (startPromise) return startPromise;
+	shuttingDown = false;
+	startPromise = (async () => {
+		await fsp.mkdir(SESSIONS_DIR, { recursive: true }).catch(() => undefined);
+		await fsp.mkdir(WORKSPACES_DIR, { recursive: true }).catch(() => undefined);
+		await loadHistory();
+		await new Promise((resolve, reject) => {
+			const onError = (error) => {
+				server.off("listening", onListening);
+				reject(error);
+			};
+			const onListening = () => {
+				server.off("error", onError);
+				resolve();
+			};
+			server.once("error", onError);
+			server.once("listening", onListening);
+			server.listen(PORT, HOST);
+		});
+		console.log(`[workbench-runner] listening on http://${HOST}:${PORT}`);
+		for (const health of backends.health()) {
+			console.log(
+				health.available
+					? `[workbench-runner] ${health.id} ${health.version} (${health.binary})`
+					: `[workbench-runner] ${health.id} unavailable: ${health.error}`
+			);
+		}
+		console.log(`[workbench-runner] default backend: ${backends.defaultId}`);
+	})();
+	startPromise.catch((error) => {
+		startPromise = null;
+		console.error("[workbench-runner] start failed:", error);
+	});
+	return startPromise;
+}
 
-function shutdown(signal) {
-	if (shuttingDown) return;
+export function getRunnerState() {
+	return {
+		started: startPromise !== null,
+		shuttingDown,
+		listening: server.listening,
+		address: server.address(),
+	};
+}
+
+export async function stopEmbeddedRunner() {
+	const runner = globalThis.__workbenchRunner;
+	if (runner?.stopRunner) await runner.stopRunner();
+}
+
+export async function stopRunner() {
 	shuttingDown = true;
-	console.log(`[workbench-runner] ${signal}; stopping ${processes.size} run(s).`);
+	console.log(`[workbench-runner] stopping ${processes.size} run(s).`);
 	for (const context of processes.values()) {
 		stopProcess(context, "SIGTERM");
 	}
-	server.close(() => process.exit(0));
+	if (server.listening) {
+		await new Promise((resolve) => server.close(() => resolve()));
+	}
+	startPromise = null;
+	shuttingDown = false;
+}
+
+function shutdown(signal) {
+	if (shuttingDown) {
+		process.exit(0);
+		return;
+	}
+	console.log(`[workbench-runner] ${signal}; stopping.`);
+	void stopRunner().finally(() => process.exit(0));
 	setTimeout(() => process.exit(0), 2_000).unref();
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+if (process.env.WORKBENCH_RUNNER_EMBEDDED === "1") {
+	globalThis.__workbenchRunner = { startRunner, stopRunner };
+} else {
+	process.on("SIGINT", () => shutdown("SIGINT"));
+	process.on("SIGTERM", () => shutdown("SIGTERM"));
+}
+
+void startRunner();

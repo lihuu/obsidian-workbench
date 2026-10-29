@@ -5,6 +5,7 @@ import { VaultBoardRepository } from "./data/repository";
 import { WorkbenchStore } from "./data/store";
 import { VIEW_TYPE_WORKBENCH, WorkbenchView } from "./view/WorkbenchView";
 import { AgentController } from "./agent/controller";
+import { LocalRunnerManager } from "./agent/local-runner";
 
 function cliText(value: string | "true" | undefined): string {
 	return typeof value === "string" && value !== "true" ? value : "";
@@ -33,6 +34,7 @@ const CLI_FLAGS: CliFlags = {
 export default class WorkbenchPlugin extends Plugin {
 	private store: WorkbenchStore | undefined;
 	private agent: AgentController | undefined;
+	private localRunner: LocalRunnerManager | undefined;
 	private quitting = false;
 
 	async onload(): Promise<void> {
@@ -43,6 +45,8 @@ export default class WorkbenchPlugin extends Plugin {
 		this.store = store;
 		const agent = new AgentController(this.app, deviceState, initialDeviceState);
 		this.agent = agent;
+		const localRunner = new LocalRunnerManager(this.app, this);
+		this.localRunner = localRunner;
 
 		this.registerDomEvent(window, "beforeunload", () => {
 			this.quitting = true;
@@ -50,6 +54,7 @@ export default class WorkbenchPlugin extends Plugin {
 		});
 
 		this.register(() => {
+			void this.localRunner?.stop();
 			this.agent?.dispose();
 			const store = this.store;
 			if (!store) return;
@@ -95,8 +100,36 @@ export default class WorkbenchPlugin extends Plugin {
 		});
 
 		this.app.workspace.onLayoutReady(() => {
-			void agent.refreshHealth();
+			void (async () => {
+				try {
+					await localRunner.ensure(initialDeviceState);
+				} catch (error) {
+					console.error("[workbench] embedded Runner failed to start", error);
+				}
+				await agent.refreshHealth();
+			})();
 		});
+
+		// Plugin reloads happen when the workspace is already laid out, so
+		// onLayoutReady is not guaranteed to fire again. Start immediately as
+		// well; ensure() is idempotent.
+		void (async () => {
+			try {
+				await localRunner.ensure(initialDeviceState);
+			} catch (error) {
+				console.error("[workbench] embedded Runner failed to start", error);
+			}
+			await agent.refreshHealth();
+		})();
+
+		this.registerInterval(
+			window.setInterval(() => {
+				const settings = this.agent?.getSnapshot().settings ?? initialDeviceState;
+				void localRunner.ensure(settings).catch((error) => {
+					console.error("[workbench] embedded Runner health check failed", error);
+				});
+			}, 30_000)
+		);
 
 		if (initialDeviceState.workbenchOpen) {
 			this.app.workspace.onLayoutReady(() => {

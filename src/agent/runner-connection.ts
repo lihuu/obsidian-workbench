@@ -10,6 +10,14 @@ function isLoopbackHost(hostname: string): boolean {
 	return host === "127.0.0.1" || host === "localhost" || host === "::1";
 }
 
+export function isLoopbackRunnerUrl(value: string): boolean {
+	try {
+		return isLoopbackHost(new URL(value).hostname);
+	} catch {
+		return false;
+	}
+}
+
 export function validateRunnerConnection(connection: RunnerConnection): void {
 	const url = new URL(connection.runnerUrl);
 	const loopback = isLoopbackHost(url.hostname);

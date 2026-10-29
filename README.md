@@ -29,10 +29,11 @@ exits without downloading; use `--force` to reinstall.
 ```
 
 The script uses `gh` when available and falls back to `curl`. It validates the
-manifest id/version before replacing the three plugin assets, backs up the
-previous assets for rollback, and leaves `data.json` untouched. If the
-`obsidian` CLI is available it reloads the plugin; otherwise reload Obsidian
-manually.
+manifest id/version before replacing the plugin assets, backs up the previous
+assets for rollback, and leaves `data.json` untouched. Releases from `0.1.2`
+also include `runner.cjs`, a desktop-only embedded Runner; the installer copies
+it when present. If the `obsidian` CLI is available it reloads the plugin;
+otherwise reload Obsidian manually.
 
 ## Where to configure in Obsidian
 
@@ -44,11 +45,16 @@ that modal opens `Workbench/README.md` in the vault.
 
 ## Agent Runner
 
-The plugin talks to a local Node Runner over HTTP. An agent backend (Pi, OMP,
-or OpenCode) runs outside Obsidian's renderer. The Runner owns the queue,
-concurrency, worktrees, and history; backend-specific CLI/protocol details live
-in adapters. GitHub sources, persistent sessions, run history, image
-attachments, and optional success/failure column mapping are included.
+The plugin talks to a Node Runner over HTTP. On desktop, the plugin bundles
+`runner.cjs` and starts it automatically on `127.0.0.1:4319` when no standalone
+Runner is already serving that address. On mobile, the plugin must use a remote
+Runner; no Node Runner runs in the mobile app.
+
+An agent backend (Pi, OMP, or OpenCode) runs as a CLI subprocess. The Runner
+owns the queue, concurrency, worktrees, and history; backend-specific
+CLI/protocol details live in adapters. GitHub sources, persistent sessions, run
+history, image attachments, and optional success/failure column mapping are
+included.
 
 ### Backends
 
@@ -72,6 +78,15 @@ selected backend supports.
 
 ### Start
 
+Desktop plugin:
+
+```text
+No npm, Node install, launchd, or manual start required.
+The plugin starts runner.cjs on desktop and stops it when the plugin unloads.
+```
+
+Standalone Runner (headless server, remote access, or development):
+
 ```bash
 npm install
 npm run runner
@@ -80,6 +95,10 @@ npm run runner
 The default endpoint is `http://127.0.0.1:4319`. The Runner checks every
 registered backend with `<binary> --version` on startup and exposes the results
 at `GET /health`.
+
+The embedded Runner is tied to the Obsidian desktop process: quitting the app
+stops it, and queued/in-flight state is not a replacement for an always-on
+Runner. The bundled and standalone Runner must not both bind the same port.
 
 Optional environment:
 
@@ -459,10 +478,11 @@ on live state transitions, not when loading old history.
 
 ## Community plugin disclosures
 
-- **Network use.** The plugin talks to a local Node Runner at
+- **Network use.** On desktop, the plugin starts a bundled local Runner at
   `http://127.0.0.1:4319` by default. The Runner can clone GitHub repositories
   and starts Pi, OMP, or OpenCode, which may contact their configured model
-  providers. These requests are required for the Agent features.
+  providers. These requests are required for the Agent features. A remote
+  Runner can be configured instead, including Cloudflare Access.
 - **Files outside the vault.** Agent features read and write configured
   workspaces, Git worktrees under `~/Workbench/worktrees`, checkouts under
   `~/Workbench/workspaces`, and session/run data under `~/.workbench`. Board
@@ -470,8 +490,10 @@ on live state transitions, not when loading old history.
 - **Accounts and credentials.** The core kanban works without an account.
   Agent backends may require their own provider account or API key. The plugin
   does not require an Obsidian account or payment.
-- **Desktop and mobile.** The kanban UI loads on desktop and mobile. Agent
-  execution requires the desktop Node Runner and is unavailable on mobile.
+- **Desktop and mobile.** The kanban UI loads on desktop and mobile. The
+  desktop plugin starts its bundled `runner.cjs`; mobile has no Node runtime
+  and must connect to a remote Runner (for example through Cloudflare Tunnel
+  and Zero Trust).
 - **Privacy.** No telemetry or analytics are sent by the plugin. No ads and no
   self-update mechanism are included.
 - **Trademark.** Workbench Kanban is an independent community project, not an
@@ -527,8 +549,9 @@ npm run build
 OBSIDIAN_VAULT=~/Obsidian/YourVault npm run deploy
 ```
 
-`npm run deploy` requires `OBSIDIAN_VAULT`; it copies `main.js`, `manifest.json`,
-`styles.css`, and `README.md` into `<vault>/.obsidian/plugins/workbench`.
+`npm run deploy` requires `OBSIDIAN_VAULT`; it copies `main.js`, `runner.cjs`,
+`manifest.json`, `styles.css`, and `README.md` into
+`<vault>/.obsidian/plugins/workbench`.
 
 ## License
 

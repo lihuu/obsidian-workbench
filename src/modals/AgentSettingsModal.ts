@@ -67,7 +67,7 @@ export class AgentSettingsModal extends Modal {
 		tokenLabel.htmlFor = tokenInput.id;
 		urlField.createDiv({
 			cls: "wb-field-hint",
-			text: "Start it with `npm run runner` in the Workbench source directory.",
+			text: "Desktop starts the bundled local Runner automatically. Set a remote URL/token for Cloudflare or another Runner.",
 		});
 
 		this.contentEl.createDiv({

@@ -6,6 +6,7 @@ set -euo pipefail
 REPO="${WORKBENCH_REPO:-lihuu/obsidian-workbench}"
 PLUGIN_ID="workbench"
 ASSETS=(main.js manifest.json styles.css)
+RUNNER_ASSET=runner.cjs
 VERSION=""
 VAULT_ARG=""
 FORCE=0
@@ -131,6 +132,10 @@ version_gt() {
 	[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
 }
 
+version_ge() {
+	[ "$1" = "$2" ] || version_gt "$1" "$2"
+}
+
 if [ "$FORCE" -eq 0 ] && [ -n "$CURRENT" ] && version_gt "$CURRENT" "$VERSION"; then
 	die "Installed version $CURRENT is newer than release $VERSION. Use --force to downgrade."
 fi
@@ -140,6 +145,9 @@ if [ "$FORCE" -eq 0 ] && [ -n "$CURRENT" ] && [ "$CURRENT" = "$VERSION" ]; then
 	for asset in "${ASSETS[@]}"; do
 		[ -s "$PLUGIN_DIR/$asset" ] || installed=0
 	done
+	if version_ge "$VERSION" "0.1.2" && [ ! -s "$PLUGIN_DIR/$RUNNER_ASSET" ]; then
+		installed=0
+	fi
 	if [ "$installed" -eq 1 ]; then
 		printf 'Workbench Kanban %s is already installed in:\n  %s\n' "$VERSION" "$PLUGIN_DIR"
 		printf 'Use --force to reinstall it.\n'
@@ -166,6 +174,11 @@ cleanup() {
 				rm -f "$PLUGIN_DIR/$asset" 2>/dev/null || true
 			fi
 		done
+		if [ -f "$BACKUP_DIR/$RUNNER_ASSET" ]; then
+			cp "$BACKUP_DIR/$RUNNER_ASSET" "$PLUGIN_DIR/$RUNNER_ASSET" 2>/dev/null || true
+		else
+			rm -f "$PLUGIN_DIR/$RUNNER_ASSET" 2>/dev/null || true
+		fi
 	fi
 	rm -rf "$TMP_DIR"
 	exit "$status"
@@ -188,6 +201,12 @@ download_assets() {
 			"https://github.com/$REPO/releases/download/$tag/$asset" \
 			|| return 1
 	done
+	if version_ge "$tag" "0.1.2"; then
+		curl -fL --retry 3 --connect-timeout 20 \
+			-o "$dest/$RUNNER_ASSET" \
+			"https://github.com/$REPO/releases/download/$tag/$RUNNER_ASSET" \
+			|| return 1
+	fi
 }
 
 printf 'Vault:  %s\n' "$VAULT"
@@ -200,6 +219,9 @@ download_assets "$VERSION" "$TMP_DIR" || die "Could not download release $VERSIO
 for asset in "${ASSETS[@]}"; do
 	[ -s "$TMP_DIR/$asset" ] || die "Downloaded release is missing $asset."
 done
+if version_ge "$VERSION" "0.1.2"; then
+	[ -s "$TMP_DIR/$RUNNER_ASSET" ] || die "Downloaded release is missing $RUNNER_ASSET."
+fi
 
 MANIFEST_ID="$(sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$TMP_DIR/manifest.json" | head -n 1)"
 MANIFEST_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$TMP_DIR/manifest.json" | head -n 1)"
@@ -214,11 +236,17 @@ for asset in "${ASSETS[@]}"; do
 		cp "$PLUGIN_DIR/$asset" "$BACKUP_DIR/$asset"
 	fi
 done
+if [ -f "$PLUGIN_DIR/$RUNNER_ASSET" ]; then
+	cp "$PLUGIN_DIR/$RUNNER_ASSET" "$BACKUP_DIR/$RUNNER_ASSET"
+fi
 ROLLBACK_NEEDED=1
 
 for asset in "${ASSETS[@]}"; do
 	cp "$TMP_DIR/$asset" "$PLUGIN_DIR/$asset"
 done
+if [ -f "$TMP_DIR/$RUNNER_ASSET" ]; then
+	cp "$TMP_DIR/$RUNNER_ASSET" "$PLUGIN_DIR/$RUNNER_ASSET"
+fi
 
 ROLLBACK_NEEDED=0
 printf 'Installed Workbench Kanban %s.\n' "$VERSION"
