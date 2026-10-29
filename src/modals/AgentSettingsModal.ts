@@ -580,34 +580,21 @@ export class AgentSettingsModal extends Modal {
 					cfAccessClientSecret: accessSecretInput.value,
 				});
 
-				if (source === "local") {
-					const path = localInput.value.trim();
-					if (path) {
-						await this.agent.bindWorkspace(this.board.id, path);
-					} else {
-						await this.agent.clearWorkspace(this.board.id);
-					}
-				} else {
-					const repoUrl = repoInput.value.trim();
-					if (!repoUrl) throw new Error("GitHub repository URL can't be empty.");
-					await this.agent.cloneGithubWorkspace(
-						this.board.id,
-						repoUrl,
-						branchInput.value
-					);
-				}
-
 				const queuedColumnId = queuedSelect.value;
 				const runningColumnId = runningSelect.value;
 				if (queuedColumnId && queuedColumnId === runningColumnId) {
 					throw new Error("Queue and Running columns must be different.");
+				}
+				const repoUrl = repoInput.value.trim();
+				if (source === "github" && !repoUrl) {
+					throw new Error("GitHub repository URL can't be empty.");
 				}
 
 				const agentConfig: BoardAgentConfig = {};
 				if (backendSelect.value) agentConfig.backend = backendSelect.value;
 				if (source === "github") {
 					agentConfig.github = {
-						repoUrl: repoInput.value.trim(),
+						repoUrl,
 						branch: branchInput.value.trim(),
 					};
 				}
@@ -626,10 +613,27 @@ export class AgentSettingsModal extends Modal {
 					};
 				}
 				if (worktreeInput.checked) agentConfig.worktree = true;
+				// Persist board settings before touching the workspace. A bad
+				// path or clone failure must not discard backend/worktree settings.
 				this.store.setBoardAgent(
 					this.board.id,
 					Object.keys(agentConfig).length > 0 ? agentConfig : undefined
 				);
+
+				if (source === "local") {
+					const path = localInput.value.trim();
+					if (path) {
+						await this.agent.bindWorkspace(this.board.id, path);
+					} else {
+						await this.agent.clearWorkspace(this.board.id);
+					}
+				} else {
+					await this.agent.cloneGithubWorkspace(
+						this.board.id,
+						repoUrl,
+						branchInput.value
+					);
+				}
 				new Notice(
 					source === "github"
 						? "GitHub workspace cloned and board agent settings saved."
