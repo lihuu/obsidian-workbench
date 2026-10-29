@@ -1,9 +1,10 @@
 {
   "id": "workbench",
-  "name": "Workbench",
-  "version": "0.1.0",
+  "name": "Workbench Kanban",
+  "version": "0.1.1",
   "minAppVersion": "1.7.2",
-  "description": "A local-first kanban workspace for projects and tasks.",
-  "author": "lihu",
+  "description": "Manage projects and agent tasks on a local-first kanban board.",
+  "author": "lihuu",
+  "authorUrl": "https://github.com/lihuu",
   "isDesktopOnly": false
 }

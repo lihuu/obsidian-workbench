@@ -2,6 +2,11 @@
 	import type { App } from "obsidian";
 	import type { Task } from "../data/types";
 	import type { RunView } from "../agent/types";
+	import {
+		githubChecksLabel,
+		githubReviewLabel,
+		githubStateLabel,
+	} from "../agent/github";
 	import MarkdownPreview from "./MarkdownPreview.svelte";
 
 	let descriptionEl: HTMLDivElement | undefined = $state();
@@ -90,6 +95,47 @@
 		<div class="wb-card-title">{task.title}</div>
 		{#if task.source === "agent"}
 			<span class="wb-agent-source" title="Created by an agent">Agent</span>
+		{/if}
+		{#if task.github}
+			<span
+				class="wb-github-source"
+				title={`Imported from GitHub ${task.github.repo}`}
+			>
+				{task.github.type === "pull_request" ? "PR" : "Issue"} #{task.github.number}
+			</span>
+			{#if task.github.state.toUpperCase() !== "OPEN"}
+				<span
+					class={`wb-github-state wb-github-state--${task.github.state.toLowerCase()}`}
+					title={`GitHub state: ${task.github.state}`}
+				>
+					{githubStateLabel(task.github.state)}
+				</span>
+			{/if}
+			{#if task.github.checks && task.github.checks.total > 0}
+				<span
+					class={`wb-github-checks wb-github-checks--${task.github.checks.state}`}
+					title={githubChecksLabel(task.github.checks)}
+				>
+					{task.github.checks.state === "failure"
+						? "✗"
+						: task.github.checks.state === "pending"
+							? "●"
+							: "✓"}
+					{task.github.checks.state === "failure"
+						? task.github.checks.failure
+						: task.github.checks.state === "pending"
+							? task.github.checks.pending
+							: task.github.checks.success}
+				</span>
+			{/if}
+			{#if githubReviewLabel(task.github.reviewDecision)}
+				<span
+					class={`wb-github-review wb-github-review--${task.github.reviewDecision?.toLowerCase()}`}
+					title={`Review: ${task.github.reviewDecision}`}
+				>
+					{githubReviewLabel(task.github.reviewDecision)}
+				</span>
+			{/if}
 		{/if}
 		{#if run}
 			<span

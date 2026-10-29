@@ -1,7 +1,7 @@
 {
   "name": "obsidian-workbench",
-  "version": "0.1.0",
-  "description": "A local-first kanban workspace for Obsidian.",
+  "version": "0.1.1",
+  "description": "Manage projects and agent tasks on a local-first kanban board.",
   "type": "module",
   "main": "main.js",
   "scripts": {

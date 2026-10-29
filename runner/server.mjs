@@ -8,7 +8,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { createJsonlDecoder } from "./protocol.mjs";
 import { RunSession, isTerminalStatus } from "./run-state.mjs";
-import { checkoutPath, expandHome, parseGitHubRepo } from "./workspace.mjs";
+import { parseGitHubRepo, checkoutPath, expandHome } from "./workspace.mjs";
+import { checkGh, closeGitHub, commentGitHub, syncGitHub } from "./github.mjs";
 import { branchForRun, isCleanStatus, worktreePath } from "./worktree.mjs";
 import { pickNextQueued, reorderPending } from "./queue.mjs";
 import { createBackendRegistry } from "./backends/index.mjs";
@@ -129,6 +130,16 @@ function readString(value, field, maxLength = 200) {
 		throw new HttpError(400, `${field} is too long.`);
 	}
 	return value;
+}
+
+function githubError(error) {
+	const message =
+		error && typeof error === "object" && typeof error.stderr === "string"
+			? error.stderr.trim()
+			: error instanceof Error
+				? error.message
+				: String(error);
+	return message.slice(0, 2_000);
 }
 
 function resolveExistingAncestors(input) {
@@ -784,6 +795,7 @@ async function handleRequest(req, res) {
 			version: RUNNER_VERSION,
 			backends: backendHealth,
 			defaultBackend: backends.defaultId,
+			gh: checkGh(),
 			pi,
 			activeRuns,
 			runningRuns: processes.size,
@@ -808,6 +820,90 @@ async function handleRequest(req, res) {
 	if (req.method === "POST" && pathname === "/workspace/github") {
 		const body = await readJson(req);
 		json(res, 200, await cloneGitHub(body));
+		return;
+	}
+
+	if (req.method === "POST" && pathname === "/github/sync") {
+		const body = await readJson(req);
+		const repoUrl = readString(body.repoUrl, "repoUrl", 2_000).trim();
+		const parsed = parseGitHubRepo(repoUrl);
+		if (!parsed) {
+			throw new HttpError(400, "Only GitHub HTTPS or SSH repository URLs are supported.");
+		}
+		const refs = Array.isArray(body.refs)
+			? body.refs.slice(0, 200).map((ref) => {
+					if (!isRecord(ref)) {
+						throw new HttpError(400, "refs entries must be objects.");
+					}
+					const type = readString(ref.type, "refs[].type", 40);
+					if (type !== "issue" && type !== "pull_request") {
+						throw new HttpError(400, "refs[].type must be issue or pull_request.");
+					}
+					if (!Number.isInteger(ref.number) || ref.number <= 0) {
+						throw new HttpError(400, "refs[].number must be a positive integer.");
+					}
+					return { type, number: ref.number };
+				})
+			: [];
+		try {
+			const result = await syncGitHub(parsed, { refs });
+			json(res, 200, result);
+		} catch (error) {
+			throw new HttpError(502, `GitHub CLI sync failed: ${githubError(error)}`);
+		}
+		return;
+	}
+
+	if (req.method === "POST" && pathname === "/github/comment") {
+		const body = await readJson(req);
+		const repoUrl = readString(body.repoUrl, "repoUrl", 2_000).trim();
+		const parsed = parseGitHubRepo(repoUrl);
+		if (!parsed) {
+			throw new HttpError(400, "Only GitHub HTTPS or SSH repository URLs are supported.");
+		}
+		const type = readString(body.type, "type", 40);
+		if (type !== "issue" && type !== "pull_request") {
+			throw new HttpError(400, "type must be issue or pull_request.");
+		}
+		if (!Number.isInteger(body.number) || body.number <= 0) {
+			throw new HttpError(400, "number must be a positive integer.");
+		}
+		const comment = readString(body.body, "body", 60_000);
+		try {
+			json(
+				res,
+				200,
+				await commentGitHub(parsed, {
+					type,
+					number: body.number,
+					body: comment,
+				})
+			);
+		} catch (error) {
+			throw new HttpError(502, `GitHub comment failed: ${githubError(error)}`);
+		}
+		return;
+	}
+
+	if (req.method === "POST" && pathname === "/github/close") {
+		const body = await readJson(req);
+		const repoUrl = readString(body.repoUrl, "repoUrl", 2_000).trim();
+		const parsed = parseGitHubRepo(repoUrl);
+		if (!parsed) {
+			throw new HttpError(400, "Only GitHub HTTPS or SSH repository URLs are supported.");
+		}
+		const type = readString(body.type, "type", 40);
+		if (type !== "issue" && type !== "pull_request") {
+			throw new HttpError(400, "type must be issue or pull_request.");
+		}
+		if (!Number.isInteger(body.number) || body.number <= 0) {
+			throw new HttpError(400, "number must be a positive integer.");
+		}
+		try {
+			json(res, 200, await closeGitHub(parsed, { type, number: body.number }));
+		} catch (error) {
+			throw new HttpError(502, `GitHub close failed: ${githubError(error)}`);
+		}
 		return;
 	}
 

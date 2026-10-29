@@ -69,6 +69,65 @@ export interface TaskProposal {
 	createdAt: number;
 }
 
+export interface GitHubChecks {
+	state: "none" | "success" | "failure" | "pending";
+	total: number;
+	success: number;
+	failure: number;
+	pending: number;
+}
+
+export interface GitHubSyncItem {
+	number: number;
+	title: string;
+	body: string;
+	url: string;
+	state: string;
+	updatedAt: string;
+	createdAt: string;
+	closedAt: string;
+	labels: string[];
+	author: string;
+	isDraft?: boolean;
+	headRefName?: string;
+	baseRefName?: string;
+	reviewDecision?: string | null;
+	mergedAt?: string | null;
+	checks?: GitHubChecks;
+}
+
+export interface GitHubSyncRef {
+	type: "issue" | "pull_request";
+	number: number;
+}
+
+export interface GitHubSyncResult {
+	repo: string;
+	issues: GitHubSyncItem[];
+	pullRequests: GitHubSyncItem[];
+}
+
+export interface GitHubImportResult {
+	imported: number;
+	updated: number;
+	moved: number;
+	skipped: number;
+}
+
+export interface GitHubActionResult {
+	repo: string;
+	type: "issue" | "pull_request";
+	number: number;
+	url: string;
+}
+
+export interface GitHubHealth {
+	binary: string;
+	available: boolean;
+	version: string;
+	error: string;
+}
+
 export interface RunEvent {
 	seq: number;
 	at: number;
@@ -115,6 +174,7 @@ export interface RunnerHealth {
 	pi: BackendHealth | null;
 	backends: BackendHealth[];
 	defaultBackend: string;
+	gh?: GitHubHealth;
 	activeRuns: RunnerRun[];
 	runsDir: string;
 	sessionsDir: string;
@@ -144,6 +204,7 @@ export interface AgentSnapshot {
 		pi: BackendHealth | null;
 		backends: BackendHealth[];
 		defaultBackend: string;
+		gh: GitHubHealth | null;
 		version: string;
 	};
 }

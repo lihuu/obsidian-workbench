@@ -1,7 +1,10 @@
 import { requestUrl } from "obsidian";
 import type {
 	AgentSettings,
+	GitHubActionResult,
 	GitHubWorkspaceInfo,
+	GitHubSyncRef,
+	GitHubSyncResult,
 	RunnerHealth,
 	RunnerPage,
 	RunnerRun,
@@ -93,6 +96,36 @@ export class RunnerClient {
 		branch: string;
 	}): Promise<GitHubWorkspaceInfo> {
 		return this.request<GitHubWorkspaceInfo>("POST", "/workspace/github", input);
+	}
+
+	syncGitHub(repoUrl: string, refs: GitHubSyncRef[] = []): Promise<GitHubSyncResult> {
+		return this.request<GitHubSyncResult>("POST", "/github/sync", { repoUrl, refs });
+	}
+
+	commentGitHub(
+		repoUrl: string,
+		type: "issue" | "pull_request",
+		number: number,
+		body: string
+	): Promise<GitHubActionResult> {
+		return this.request<GitHubActionResult>("POST", "/github/comment", {
+			repoUrl,
+			type,
+			number,
+			body,
+		});
+	}
+
+	closeGitHub(
+		repoUrl: string,
+		type: "issue" | "pull_request",
+		number: number
+	): Promise<GitHubActionResult> {
+		return this.request<GitHubActionResult>("POST", "/github/close", {
+			repoUrl,
+			type,
+			number,
+		});
 	}
 
 	startRun(input: {

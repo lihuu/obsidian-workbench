@@ -53,6 +53,35 @@ describe("board schema", () => {
 		expect(parsed).toEqual(board);
 	});
 
+	it("round-trips imported GitHub task metadata", () => {
+		const board = makeBoard();
+		board.columns[0].tasks[0] = {
+			...board.columns[0].tasks[0],
+			source: "github",
+			github: {
+				repo: "acme/repo",
+				type: "pull_request",
+				number: 42,
+				url: "https://github.com/acme/repo/pull/42",
+				state: "MERGED",
+				updatedAt: "2026-10-29T00:00:00Z",
+				title: "Add sync",
+				author: "octocat",
+				labels: ["enhancement"],
+				isDraft: false,
+				headRefName: "feature/sync",
+				baseRefName: "main",
+				reviewDecision: "APPROVED",
+				mergedAt: "2026-10-30T00:00:00Z",
+				closedAt: "2026-10-30T00:00:00Z",
+				checks: { state: "success", total: 2, success: 2, failure: 0, pending: 0 },
+				descriptionHash: "abc123",
+			},
+		};
+		const parsed = parseBoard(serializeBoard(board), "Workbench/boards/b_abc123.json");
+		expect(parsed).toEqual(board);
+	});
+
 	it("strips transient drag state when serializing", () => {
 		const board = makeBoard();
 		board.columns[0].tasks.push({

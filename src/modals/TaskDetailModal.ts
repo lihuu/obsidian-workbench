@@ -3,10 +3,17 @@ import {
 	Component,
 	MarkdownRenderer,
 	Modal,
+	Notice,
 	Platform,
 } from "obsidian";
 import type { Board, Task, TaskPatch } from "../data/types";
 import type { AgentController } from "../agent/controller";
+import {
+	githubChecksLabel,
+	githubRepoUrl,
+	githubReviewLabel,
+	githubStateLabel,
+} from "../agent/github";
 import {
 	runHistoryLabel,
 	runStatusLabel,
@@ -20,7 +27,10 @@ import {
 	canFollowUp as runCanFollowUp,
 	canSteer as runCanSteer,
 } from "../agent/capabilities";
+import { ConfirmModal } from "./ConfirmModal";
+import { GitHubCommentModal } from "./GitHubCommentModal";
 import { NoteSuggestModal } from "./NoteSuggestModal";
+import { openUrl } from "../ui/web-viewer";
 
 export class TaskDetailModal extends Modal {
 	private readonly task: Task;
@@ -29,6 +39,7 @@ export class TaskDetailModal extends Modal {
 	private readonly onSave: (patch: TaskPatch) => void;
 	private readonly onDelete: () => Promise<void> | void;
 	private readonly onRunState: (run: RunView) => void;
+	private readonly onMoveToDone: () => void;
 	private deleteArmed = false;
 	private deleteTimer: number | undefined;
 	private allowClose = false;
@@ -85,7 +96,8 @@ export class TaskDetailModal extends Modal {
 		agent: AgentController,
 		onSave: (patch: TaskPatch) => void,
 		onDelete: () => Promise<void> | void,
-		onRunState: (run: RunView) => void
+		onRunState: (run: RunView) => void,
+		onMoveToDone: () => void
 	) {
 		super(app);
 		this.task = task;
@@ -94,6 +106,7 @@ export class TaskDetailModal extends Modal {
 		this.onSave = onSave;
 		this.onDelete = onDelete;
 		this.onRunState = onRunState;
+		this.onMoveToDone = onMoveToDone;
 	}
 
 	onOpen(): void {
@@ -200,6 +213,7 @@ export class TaskDetailModal extends Modal {
 			text: `Created ${formatter.format(new Date(this.task.createdAt))} · Updated ${formatter.format(new Date(this.task.updatedAt))}`,
 		});
 
+		this.renderGitHubSection();
 		this.renderRunSection();
 
 		const footer = this.contentEl.createDiv({ cls: "wb-modal-footer" });
@@ -250,6 +264,94 @@ export class TaskDetailModal extends Modal {
 				titleInput.select();
 			}, 0);
 		}
+	}
+
+	private renderGitHubSection(): void {
+		const link = this.task.github;
+		if (!link) return;
+		const kind = link.type === "pull_request" ? "PR" : "issue";
+		const section = this.contentEl.createDiv({ cls: "wb-github-section" });
+		const header = section.createDiv({ cls: "wb-github-header" });
+		header.createDiv({
+			cls: "wb-github-title",
+			text: `GitHub ${kind} #${link.number}`,
+		});
+		header.createSpan({
+			cls: `wb-github-state wb-github-state--${link.state.toLowerCase()}`,
+			text: githubStateLabel(link.state),
+		});
+
+		const meta = section.createDiv({ cls: "wb-github-meta" });
+		meta.createDiv({ text: link.repo });
+		if (link.author) meta.createDiv({ text: `@${link.author}` });
+		if (link.labels && link.labels.length > 0) {
+			meta.createDiv({ text: link.labels.join(", ") });
+		}
+		if (link.isDraft) meta.createDiv({ text: "Draft" });
+		const checks = githubChecksLabel(link.checks);
+		if (checks) meta.createDiv({ text: checks });
+		const review = githubReviewLabel(link.reviewDecision);
+		if (review) meta.createDiv({ text: review });
+		if (link.mergedAt) meta.createDiv({ text: "Merged" });
+		if (link.closedAt && link.state.toUpperCase() !== "MERGED") {
+			meta.createDiv({ text: "Closed" });
+		}
+
+		const actions = section.createDiv({ cls: "wb-github-actions" });
+		const openButton = actions.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small",
+			text: "Open in browser",
+		});
+		openButton.addEventListener("click", () => openUrl(this.app, link.url));
+		const commentButton = actions.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small",
+			text: "Comment",
+		});
+		commentButton.addEventListener("click", () => {
+			new GitHubCommentModal(this.app, link, async (body) => {
+				await this.agent.commentGitHub(
+					githubRepoUrl(link.repo),
+					link.type,
+					link.number,
+					body
+				);
+			}).open();
+		});
+		if (link.state.toUpperCase() === "OPEN") {
+			const closeButton = actions.createEl("button", {
+				cls: "wb-button wb-button--danger wb-button--small",
+				text: `Close ${kind}`,
+			});
+			closeButton.addEventListener("click", () => {
+				new ConfirmModal(
+					this.app,
+					`Close ${kind} #${link.number}`,
+					`Close ${link.repo}#${link.number} on GitHub? This uses your local gh login.`,
+					"Close on GitHub",
+					async () => {
+						await this.agent.closeGitHub(
+							githubRepoUrl(link.repo),
+							link.type,
+							link.number
+						);
+						this.onSave({
+							github: {
+								...link,
+								state: "CLOSED",
+								closedAt: new Date().toISOString(),
+							},
+						});
+						this.onMoveToDone();
+						new Notice(`Closed ${kind} #${link.number}.`);
+						this.close();
+					}
+				).open();
+			});
+		}
+		section.createDiv({
+			cls: "wb-field-hint",
+			text: "Open in browser uses Obsidian Web viewer when available; otherwise your system browser.",
+		});
 	}
 
 	private renderRunSection(): void {

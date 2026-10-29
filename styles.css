@@ -1314,6 +1314,7 @@
 
 .wb-card-heading {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: flex-start;
 	gap: var(--size-2-2);
 }
@@ -1345,6 +1346,118 @@
 	font-size: var(--font-ui-smaller);
 	line-height: 1.35;
 	white-space: nowrap;
+}
+
+.wb-github-source {
+	flex: 0 0 auto;
+	margin-top: 1px;
+	padding: 1px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.35;
+	white-space: nowrap;
+}
+
+.wb-github-state,
+.wb-github-checks,
+.wb-github-review {
+	flex: 0 0 auto;
+	margin-top: 1px;
+	padding: 1px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.35;
+	white-space: nowrap;
+}
+
+.wb-github-state {
+	color: var(--text-muted);
+}
+
+.wb-github-state--merged {
+	color: var(--color-purple);
+	border-color: var(--color-purple);
+}
+
+.wb-github-state--closed {
+	color: var(--text-muted);
+}
+
+.wb-github-checks--success {
+	color: var(--color-green);
+	border-color: var(--color-green);
+}
+
+.wb-github-checks--failure {
+	color: var(--text-error);
+	border-color: var(--text-error);
+}
+
+.wb-github-checks--pending {
+	color: var(--color-yellow);
+	border-color: var(--color-yellow);
+}
+
+.wb-github-review {
+	color: var(--text-muted);
+}
+
+.wb-github-review--approved {
+	color: var(--color-green);
+	border-color: var(--color-green);
+}
+
+.wb-github-review--changes_requested {
+	color: var(--text-error);
+	border-color: var(--text-error);
+}
+
+.wb-github-review--review_required {
+	color: var(--color-yellow);
+	border-color: var(--color-yellow);
+}
+
+.wb-github-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 12px 0;
+	padding: 10px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+}
+
+.wb-github-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.wb-github-title {
+	font-weight: var(--font-semibold);
+}
+
+.wb-github-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-github-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.wb-github-comment-input {
+	min-height: 140px;
+	resize: vertical;
 }
 
 .wb-run-badge--running,

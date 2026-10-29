@@ -1,4 +1,4 @@
-# Workbench
+# Workbench Kanban
 
 Local-first kanban boards for Obsidian. Board data lives in
 `Workbench/boards/<id>.json`; device-local runner settings and checkout paths
@@ -108,6 +108,52 @@ credentials and SSH agents are used; tokens are never written into the board.
 
 The repository URL and branch sync with the board. The checkout path and Runner
 connection stay on this device. Local folder paths also stay on this device.
+
+### GitHub issues and pull requests
+
+The Runner links GitHub issues and pull requests through the locally
+authenticated `gh` CLI. It does not use the GitHub API directly and does not
+store a GitHub token in the board.
+
+```bash
+gh auth status
+```
+
+In **Agent → GitHub repository**, click **Sync GitHub**. The sync is one-way:
+
+```text
+GitHub issues / PRs → Workbench tasks
+```
+
+- Open issues and pull requests are imported into Inbox, then Backlog, then the
+  first column.
+- Imported tasks show an `Issue #123` / `PR #123` badge plus state, check, and
+  review badges.
+- Re-running sync updates existing repo/type/number links instead of creating
+  duplicates.
+- Local title and description edits are preserved. Remote titles only replace a
+  title that still matches the previous synced title; the generated body only
+  refreshes when its hash still matches the last generated description.
+- Closed issues and merged PRs linked to tasks are fetched even when they are
+  outside the open-list window. Merged PRs and closed issues move to **Done**
+  (or the last column) automatically.
+- PRs store `reviewDecision` and normalized check counts: passing, failing,
+  pending, or none.
+- GitHub titles/bodies/labels are imported into the task description; the task
+  detail shows metadata and actions.
+- **Comment** and **Close issue/PR** call `gh` through the local Runner. Merge,
+  reopen, labels, and review submission are not exposed yet. Agents can use
+  `gh` explicitly for other operations.
+- **Open in browser** uses Obsidian's Web viewer when available, otherwise the
+  system browser. To enable the built-in browser manually, turn on
+  **Settings → Core plugins → Web viewer**, then run
+  **Web viewer: Open web viewer** from the command palette or call
+  `webviewer:open`.
+- The Runner exposes `GET /health` with `gh` availability/version,
+  `POST /github/sync` with `{ repoUrl, refs? }`,
+  `POST /github/comment`, and `POST /github/close`.
+- The GitHub API rate limit applies to `gh`; each list pass requests at most 100
+  open issues and 100 open pull requests. Linked `refs` are capped at 200.
 
 ### Worktree mode
 
@@ -302,6 +348,26 @@ queued run. Deleting a task aborts its queued or running run first.
 Automatic moves are off when no mapping is configured. The UI applies mappings
 on live state transitions, not when loading old history.
 
+## Community plugin disclosures
+
+- **Network use.** The plugin talks to a local Node Runner at
+  `http://127.0.0.1:4319` by default. The Runner can clone GitHub repositories
+  and starts Pi, OMP, or OpenCode, which may contact their configured model
+  providers. These requests are required for the Agent features.
+- **Files outside the vault.** Agent features read and write configured
+  workspaces, Git worktrees under `~/Workbench/worktrees`, checkouts under
+  `~/Workbench/workspaces`, and session/run data under `~/.workbench`. Board
+  data itself stays inside the vault.
+- **Accounts and credentials.** The core kanban works without an account.
+  Agent backends may require their own provider account or API key. The plugin
+  does not require an Obsidian account or payment.
+- **Desktop and mobile.** The kanban UI loads on desktop and mobile. Agent
+  execution requires the desktop Node Runner and is unavailable on mobile.
+- **Privacy.** No telemetry or analytics are sent by the plugin. No ads and no
+  self-update mechanism are included.
+- **Trademark.** Workbench Kanban is an independent community project, not an
+  Obsidian first-party product.
+
 ### Data and security
 
 - Runner binds to loopback by default.
@@ -326,6 +392,9 @@ on live state transitions, not when loading old history.
 GET  /health
 POST /workspace          { path }
 POST /workspace/github   { boardId, repoUrl, branch }
+POST /github/sync        { repoUrl, refs? }  (uses local gh auth)
+POST /github/comment     { repoUrl, type, number, body }
+POST /github/close       { repoUrl, type, number }
 POST /runs               { boardId, taskId, title, prompt, cwd, backend?, images?, worktree? }  -> queued/running
 GET  /runs?boardId=...&taskId=...&limit=...
 GET  /runs/:id?after=N
