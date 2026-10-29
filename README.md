@@ -217,8 +217,8 @@ device-local and must be entered on the device, or use a GitHub source board.
 3. Choose **Local folder** or **GitHub repository**.
 4. Choose the **Execution backend** (Pi, OMP, OpenCode, or another registered
    backend).
-5. For local, enter a folder. For GitHub, enter an HTTPS/SSH GitHub URL and an
-   optional branch.
+5. For local, enter a folder or use **Choose…** (macOS native folder picker).
+   For GitHub, enter an HTTPS/SSH GitHub URL and an optional branch.
 6. Set optional **Queue** / **Running** execution columns.
 7. Set optional **On success** / **On failure** columns.
 8. Optionally enable **Use a git worktree for each run**.

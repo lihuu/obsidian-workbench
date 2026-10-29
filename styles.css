@@ -1694,6 +1694,10 @@
 	min-width: 120px;
 }
 
+.wb-field-row .wb-button {
+	flex: 0 0 auto;
+}
+
 .wb-agent-checkout {
 	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);

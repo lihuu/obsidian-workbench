@@ -1,8 +1,9 @@
-import { App, Modal, Notice, TFile } from "obsidian";
+import { App, Modal, Notice, Platform, TFile } from "obsidian";
 import type { AgentController } from "../agent/controller";
 import type { Board, BoardAgentConfig } from "../data/types";
 import type { WorkbenchStore } from "../data/store";
 import { collectGitHubRefs, importGitHubItems } from "../agent/github";
+import { pickDirectory } from "../ui/directory-picker";
 
 type SourceKind = "local" | "github";
 
@@ -203,7 +204,8 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-field-label",
 			text: "Local workspace",
 		});
-		const localInput = localField.createEl("input", {
+		const localRow = localField.createDiv({ cls: "wb-field-row" });
+		const localInput = localRow.createEl("input", {
 			cls: "wb-input",
 			type: "text",
 		});
@@ -211,6 +213,31 @@ export class AgentSettingsModal extends Modal {
 		localInput.placeholder = "~/Obsidian/obsidian-workbench";
 		localInput.id = `wb-agent-local-${Date.now()}`;
 		localLabel.htmlFor = localInput.id;
+		if (Platform.isDesktopApp && Platform.isMacOS) {
+			const browseButton = localRow.createEl("button", {
+				cls: "wb-button wb-button--small",
+				text: "Choose…",
+				attr: { type: "button", "aria-label": "Choose local workspace folder" },
+			});
+			browseButton.addEventListener("click", () => {
+				browseButton.disabled = true;
+				void pickDirectory("Select Workbench local workspace")
+					.then((path) => {
+						if (!path) return;
+						localInput.value = path;
+					})
+					.catch((error) => {
+						new Notice(
+							`Could not choose folder: ${
+								error instanceof Error ? error.message : String(error)
+							}`
+						);
+					})
+					.finally(() => {
+						browseButton.disabled = false;
+					});
+			});
+		}
 		localField.createDiv({
 			cls: "wb-field-hint",
 			text: "The Runner validates this folder. Leave empty to clear it.",
