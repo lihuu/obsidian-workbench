@@ -4,6 +4,36 @@ Local-first kanban boards for Obsidian. Board data lives in
 `Workbench/boards/<id>.json`; device-local runner settings and checkout paths
 live in the plugin's `data.json`.
 
+## Install or update
+
+Run the installer from the Obsidian vault root. It detects `.obsidian`
+automatically, installs the latest GitHub release into
+`.obsidian/plugins/workbench`, and preserves `data.json`.
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/lihuu/obsidian-workbench/main/install-workbench.sh \
+  -o install-workbench.sh
+chmod +x install-workbench.sh
+./install-workbench.sh
+```
+
+Update is the same command. If the installed version is already current, it
+exits without downloading; use `--force` to reinstall.
+
+```bash
+./install-workbench.sh                 # latest
+./install-workbench.sh --version 0.1.1 # specific release
+./install-workbench.sh --force         # redownload current version
+./install-workbench.sh --vault "$HOME/Obsidian/MyVault"
+```
+
+The script uses `gh` when available and falls back to `curl`. It validates the
+manifest id/version before replacing the three plugin assets, backs up the
+previous assets for rollback, and leaves `data.json` untouched. If the
+`obsidian` CLI is available it reloads the plugin; otherwise reload Obsidian
+manually.
+
 ## Where to configure in Obsidian
 
 Each board owns its workspace and execution configuration. Open the board and
