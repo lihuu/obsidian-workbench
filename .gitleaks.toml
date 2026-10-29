@@ -1,0 +1,10 @@
+title = "Workbench gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated Obsidian bundle; source files are scanned separately."
+paths = [
+  '''main\.js$''',
+]

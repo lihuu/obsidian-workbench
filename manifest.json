@@ -1,0 +1,9 @@
+{
+  "id": "workbench",
+  "name": "Workbench",
+  "version": "0.1.0",
+  "minAppVersion": "1.7.2",
+  "description": "A local-first kanban workspace for projects and tasks.",
+  "author": "lihu",
+  "isDesktopOnly": false
+}
