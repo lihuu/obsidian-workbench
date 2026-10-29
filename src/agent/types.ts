@@ -5,6 +5,10 @@ export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "cancell
 export interface AgentSettings {
 	runnerUrl: string;
 	runnerToken: string;
+	/** Cloudflare Access service token ID, for a Runner behind Zero Trust. */
+	cfAccessClientId: string;
+	/** Cloudflare Access service token secret. */
+	cfAccessClientSecret: string;
 	workspaces: Record<string, string>;
 }
 

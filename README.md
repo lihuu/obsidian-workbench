@@ -112,6 +112,85 @@ match it. Browser origins other than `app://obsidian.md` and
 comma-separated allowlist if the Runner should only accept workspaces below
 specific directories. Symlinked roots such as `/tmp` on macOS are normalized.
 
+### Cloudflare Tunnel and Zero Trust (mobile)
+
+For mobile, keep the Runner bound to localhost and put Cloudflare Tunnel +
+Zero Trust Access in front of it. Do not expose the Node port directly.
+
+The plugin requires **both** security layers for a remote URL:
+
+1. Cloudflare Access Service Token
+2. `WORKBENCH_RUNNER_TOKEN` bearer token
+
+The plugin refuses remote `http://` URLs, refuses remote URLs without a Runner
+token, and requires both Access fields together.
+
+Cloudflare dashboard:
+
+```text
+Zero Trust → Access → Applications → Add application
+  Domain: workbench.example.com
+  Policy: Service Auth
+  Include: Service Token → workbench-mobile
+```
+
+Cloudflare Tunnel:
+
+```bash
+cloudflared tunnel create workbench
+cloudflared tunnel route dns workbench workbench.example.com
+```
+
+`~/.cloudflared/config.yml`:
+
+```yaml
+tunnel: workbench
+credentials-file: /Users/lihu/.cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: workbench.example.com
+    service: http://127.0.0.1:4319
+  - service: http_status:404
+```
+
+Run:
+
+```bash
+export WORKBENCH_RUNNER_TOKEN="$(openssl rand -hex 32)"
+cd /Users/lihu/Obsidian/obsidian-workbench-ready
+npm run runner
+cloudflared tunnel run workbench
+```
+
+In Obsidian **Agent → Runner connection**, fill:
+
+```text
+Runner URL:              https://workbench.example.com
+Runner token:            <WORKBENCH_RUNNER_TOKEN>
+CF-Access-Client-Id:     <service token client ID>
+CF-Access-Client-Secret: <service token secret>
+```
+
+Verify Access first; without the service-token headers the request should be
+blocked, not reach the Runner:
+
+```bash
+curl -i https://workbench.example.com/health
+curl -i https://workbench.example.com/health \
+  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  -H "Authorization: Bearer $WORKBENCH_RUNNER_TOKEN"
+```
+
+The service token is an admin credential for the Runner. Rotate it if leaked.
+Agent processes can read provider API keys and execute code in allowed
+workspaces; treat a remote Runner as a high-value endpoint.
+
+On mobile, use a GitHub source board where possible. The plugin now
+auto-clones the board's GitHub workspace on the Runner when a preview or run
+starts and no device-local workspace path exists. Local workspace paths remain
+device-local and must be entered on the device, or use a GitHub source board.
+
 ### Configure a board
 
 1. Open the board.

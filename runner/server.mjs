@@ -25,6 +25,13 @@ const proposalStore = new ProposalStore();
 /** @type {Map<string, string>} run id → scoped proposal token */
 const runTokens = new Map();
 const TOKEN = process.env.WORKBENCH_RUNNER_TOKEN ?? "";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+if (!LOOPBACK_HOSTS.has(HOST) && !TOKEN) {
+	console.error(
+		`[workbench-runner] refusing to listen on ${HOST} without WORKBENCH_RUNNER_TOKEN`
+	);
+	process.exit(1);
+}
 const ALLOWED_ORIGINS = new Set(
 	(process.env.WORKBENCH_ALLOWED_ORIGINS ?? "app://obsidian.md,capacitor://localhost")
 		.split(",")
@@ -761,7 +768,10 @@ async function handleRequest(req, res) {
 		res.setHeader("Access-Control-Allow-Origin", origin);
 		res.setHeader("Vary", "Origin");
 	}
-	res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+	res.setHeader(
+		"Access-Control-Allow-Headers",
+		"Content-Type, Authorization, CF-Access-Client-Id, CF-Access-Client-Secret"
+	);
 	res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 
 	if (req.method === "OPTIONS") {
