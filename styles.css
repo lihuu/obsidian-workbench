@@ -574,10 +574,17 @@
 	max-height: none;
 }
 
-.wb-agent-modal > .wb-modal-footer {
+.wb-agent-modal > .wb-agent-footer {
 	flex: 0 0 auto;
 	padding: var(--size-4-3) var(--size-4-6) var(--size-4-4);
 	background: var(--background-primary);
+}
+
+.wb-agent-inline-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
 }
 
 .wb-field {

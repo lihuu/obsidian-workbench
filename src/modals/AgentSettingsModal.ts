@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Platform, TFile } from "obsidian";
+import { App, Modal, Notice, Platform } from "obsidian";
 import type { AgentController } from "../agent/controller";
 import type { Board, BoardAgentConfig } from "../data/types";
 import type { WorkbenchStore } from "../data/store";
@@ -121,6 +121,13 @@ export class AgentSettingsModal extends Modal {
 		accessSecretField.createDiv({
 			cls: "wb-field-hint",
 			text: "Cloudflare Zero Trust → Access → Service Token. Use both fields together; remote URLs also require HTTPS and a Runner token.",
+		});
+		const connectionActions = connectionSection.createDiv({
+			cls: "wb-agent-inline-actions",
+		});
+		const testButton = connectionActions.createEl("button", {
+			cls: "wb-button wb-button--small",
+			text: "Test connection",
 		});
 
 		this.contentEl.createDiv({
@@ -261,6 +268,13 @@ export class AgentSettingsModal extends Modal {
 		localGithubHint = localField.createDiv({
 			cls: "wb-field-hint wb-agent-github-hint",
 		});
+		const localActions = localField.createDiv({
+			cls: "wb-agent-inline-actions",
+		});
+		const clearButton = localActions.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small",
+			text: "Clear workspace",
+		});
 
 		const githubField = this.contentEl.createDiv({ cls: "wb-field" });
 		const repoLabel = githubField.createEl("label", {
@@ -295,6 +309,18 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-field-hint",
 			text: "System git credentials/SSH are used; no token is stored in the board.",
 		});
+		const githubActions = this.contentEl.createDiv({
+			cls: "wb-agent-inline-actions",
+		});
+		githubActions.createSpan({
+			cls: "wb-field-hint",
+			text: "GitHub issues / pull requests",
+		});
+		const syncButtonEl = githubActions.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small",
+			text: "Sync GitHub",
+		});
+		syncButton = syncButtonEl;
 
 		const checkoutEl = this.contentEl.createDiv({
 			cls: "wb-agent-checkout",
@@ -517,27 +543,14 @@ export class AgentSettingsModal extends Modal {
 			void this.agent.refreshHealth().then(() => showHealth(this.agent.getSnapshot().health));
 		}
 
-		const footer = this.modalEl.createDiv({ cls: "wb-modal-footer" });
-		const helpButton = footer.createEl("button", {
-			cls: "wb-button wb-button--ghost",
-			text: "Help",
-		});
-		const testButton = footer.createEl("button", {
-			cls: "wb-button",
-			text: "Test connection",
-		});
-		const syncButtonEl = footer.createEl("button", {
-			cls: "wb-button wb-button--ghost",
-			text: "Sync GitHub",
-		});
-		syncButton = syncButtonEl;
-		updateVisibility();
-		const clearButton = footer.createEl("button", {
-			cls: "wb-button wb-button--ghost",
-			text: "Clear workspace",
+		const footer = this.modalEl.createDiv({
+			cls: "wb-modal-footer wb-agent-footer",
 		});
 		footer.createDiv({ cls: "wb-spacer" });
-		const cancelButton = footer.createEl("button", { cls: "wb-button", text: "Cancel" });
+		const cancelButton = footer.createEl("button", {
+			cls: "wb-button",
+			text: "Cancel",
+		});
 		const saveButton = footer.createEl("button", {
 			cls: "wb-button wb-button--primary",
 			text: "Save",
@@ -553,16 +566,6 @@ export class AgentSettingsModal extends Modal {
 			errorEl.setText(error instanceof Error ? error.message : String(error));
 			errorEl.show();
 		};
-
-		helpButton.addEventListener("click", () => {
-			const guide = this.app.vault.getAbstractFileByPath("Workbench/README.md");
-			if (guide instanceof TFile) {
-				void this.app.workspace.getLeaf("tab").openFile(guide);
-				window.setTimeout(() => this.close(), 100);
-			} else {
-				new Notice("Workbench/README.md not found.");
-			}
-		});
 
 		testButton.addEventListener("click", () => {
 			errorEl.hide();
