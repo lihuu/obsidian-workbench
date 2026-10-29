@@ -7,6 +7,8 @@ export interface DeviceState {
 	workbenchOpen: boolean;
 	runnerUrl: string;
 	runnerToken: string;
+	cfAccessClientId: string;
+	cfAccessClientSecret: string;
 	workspaces: Record<string, string>;
 }
 
@@ -15,6 +17,8 @@ interface StoredDeviceData {
 	workbenchOpen?: unknown;
 	runnerUrl?: unknown;
 	runnerToken?: unknown;
+	cfAccessClientId?: unknown;
+	cfAccessClientSecret?: unknown;
 	workspaces?: unknown;
 }
 
@@ -38,6 +42,8 @@ export class PluginDeviceState {
 		workbenchOpen: false,
 		runnerUrl: DEFAULT_RUNNER_URL,
 		runnerToken: "",
+		cfAccessClientId: "",
+		cfAccessClientSecret: "",
 		workspaces: {},
 	};
 	private saveChain: Promise<void> = Promise.resolve();
@@ -52,6 +58,12 @@ export class PluginDeviceState {
 				workbenchOpen: raw?.workbenchOpen === true,
 				runnerUrl: readRunnerUrl(raw?.runnerUrl),
 				runnerToken: typeof raw?.runnerToken === "string" ? raw.runnerToken : "",
+				cfAccessClientId:
+					typeof raw?.cfAccessClientId === "string" ? raw.cfAccessClientId : "",
+				cfAccessClientSecret:
+					typeof raw?.cfAccessClientSecret === "string"
+						? raw.cfAccessClientSecret
+						: "",
 				workspaces: readWorkspaces(raw?.workspaces),
 			};
 		} catch {
@@ -60,6 +72,8 @@ export class PluginDeviceState {
 				workbenchOpen: false,
 				runnerUrl: DEFAULT_RUNNER_URL,
 				runnerToken: "",
+				cfAccessClientId: "",
+				cfAccessClientSecret: "",
 				workspaces: {},
 			};
 		}
@@ -86,6 +100,8 @@ export class PluginDeviceState {
 			workbenchOpen: this.cached.workbenchOpen,
 			runnerUrl: this.cached.runnerUrl,
 			runnerToken: this.cached.runnerToken,
+			cfAccessClientId: this.cached.cfAccessClientId,
+			cfAccessClientSecret: this.cached.cfAccessClientSecret,
 			workspaces: this.cached.workspaces,
 		};
 		const write = this.saveChain.then(() => this.plugin.saveData(data));

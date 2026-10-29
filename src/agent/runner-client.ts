@@ -1,6 +1,5 @@
 import { requestUrl } from "obsidian";
 import type {
-	AgentSettings,
 	GitHubActionResult,
 	GitHubWorkspaceInfo,
 	GitHubSyncRef,
@@ -12,6 +11,10 @@ import type {
 	TaskProposal,
 	WorkspaceInfo,
 } from "./types";
+import {
+	buildRunnerHeaders,
+	type RunnerConnection,
+} from "./runner-connection";
 
 export function normalizeRunnerUrl(value: string): string {
 	const trimmed = value.trim();
@@ -36,16 +39,16 @@ function errorMessage(error: unknown): string {
 }
 
 export class RunnerClient {
-	constructor(private readonly getConnection: () => Pick<AgentSettings, "runnerUrl" | "runnerToken">) {}
+	constructor(private readonly getConnection: () => RunnerConnection) {}
 
 	private async request<T>(
 		method: "GET" | "POST",
 		path: string,
 		body?: unknown
 	): Promise<T> {
-		const { runnerUrl, runnerToken } = this.getConnection();
-		const headers: Record<string, string> = {};
-		if (runnerToken) headers.Authorization = `Bearer ${runnerToken}`;
+		const connection = this.getConnection();
+		const { runnerUrl } = connection;
+		const headers = buildRunnerHeaders(connection);
 		if (body !== undefined) headers["Content-Type"] = "application/json";
 
 		let response;

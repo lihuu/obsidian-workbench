@@ -25,6 +25,13 @@ const proposalStore = new ProposalStore();
 /** @type {Map<string, string>} run id → scoped proposal token */
 const runTokens = new Map();
 const TOKEN = process.env.WORKBENCH_RUNNER_TOKEN ?? "";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+if (!LOOPBACK_HOSTS.has(HOST) && !TOKEN) {
+	console.error(
+		`[workbench-runner] refusing to listen on ${HOST} without WORKBENCH_RUNNER_TOKEN`
+	);
+	process.exit(1);
+}
 const ALLOWED_ORIGINS = new Set(
 	(process.env.WORKBENCH_ALLOWED_ORIGINS ?? "app://obsidian.md,capacitor://localhost")
 		.split(",")
@@ -761,7 +768,10 @@ async function handleRequest(req, res) {
 		res.setHeader("Access-Control-Allow-Origin", origin);
 		res.setHeader("Vary", "Origin");
 	}
-	res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+	res.setHeader(
+		"Access-Control-Allow-Headers",
+		"Content-Type, Authorization, CF-Access-Client-Id, CF-Access-Client-Secret"
+	);
 	res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 
 	if (req.method === "OPTIONS") {
@@ -1168,32 +1178,87 @@ const server = http.createServer((req, res) => {
 	});
 });
 
-await fsp.mkdir(SESSIONS_DIR, { recursive: true }).catch(() => undefined);
-await fsp.mkdir(WORKSPACES_DIR, { recursive: true }).catch(() => undefined);
-await loadHistory();
+let startPromise = null;
 
-server.listen(PORT, HOST, () => {
-	console.log(`[workbench-runner] listening on http://${HOST}:${PORT}`);
-	for (const health of backends.health()) {
-		console.log(
-			health.available
-				? `[workbench-runner] ${health.id} ${health.version} (${health.binary})`
-				: `[workbench-runner] ${health.id} unavailable: ${health.error}`
-		);
-	}
-	console.log(`[workbench-runner] default backend: ${backends.defaultId}`);
-});
+export function startRunner() {
+	if (startPromise) return startPromise;
+	shuttingDown = false;
+	startPromise = (async () => {
+		await fsp.mkdir(SESSIONS_DIR, { recursive: true }).catch(() => undefined);
+		await fsp.mkdir(WORKSPACES_DIR, { recursive: true }).catch(() => undefined);
+		await loadHistory();
+		await new Promise((resolve, reject) => {
+			const onError = (error) => {
+				server.off("listening", onListening);
+				reject(error);
+			};
+			const onListening = () => {
+				server.off("error", onError);
+				resolve();
+			};
+			server.once("error", onError);
+			server.once("listening", onListening);
+			server.listen(PORT, HOST);
+		});
+		console.log(`[workbench-runner] listening on http://${HOST}:${PORT}`);
+		for (const health of backends.health()) {
+			console.log(
+				health.available
+					? `[workbench-runner] ${health.id} ${health.version} (${health.binary})`
+					: `[workbench-runner] ${health.id} unavailable: ${health.error}`
+			);
+		}
+		console.log(`[workbench-runner] default backend: ${backends.defaultId}`);
+	})();
+	startPromise.catch((error) => {
+		startPromise = null;
+		console.error("[workbench-runner] start failed:", error);
+	});
+	return startPromise;
+}
 
-function shutdown(signal) {
-	if (shuttingDown) return;
+export function getRunnerState() {
+	return {
+		started: startPromise !== null,
+		shuttingDown,
+		listening: server.listening,
+		address: server.address(),
+	};
+}
+
+export async function stopEmbeddedRunner() {
+	const runner = globalThis.__workbenchRunner;
+	if (runner?.stopRunner) await runner.stopRunner();
+}
+
+export async function stopRunner() {
 	shuttingDown = true;
-	console.log(`[workbench-runner] ${signal}; stopping ${processes.size} run(s).`);
+	console.log(`[workbench-runner] stopping ${processes.size} run(s).`);
 	for (const context of processes.values()) {
 		stopProcess(context, "SIGTERM");
 	}
-	server.close(() => process.exit(0));
+	if (server.listening) {
+		await new Promise((resolve) => server.close(() => resolve()));
+	}
+	startPromise = null;
+	shuttingDown = false;
+}
+
+function shutdown(signal) {
+	if (shuttingDown) {
+		process.exit(0);
+		return;
+	}
+	console.log(`[workbench-runner] ${signal}; stopping.`);
+	void stopRunner().finally(() => process.exit(0));
 	setTimeout(() => process.exit(0), 2_000).unref();
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+if (process.env.WORKBENCH_RUNNER_EMBEDDED === "1") {
+	globalThis.__workbenchRunner = { startRunner, stopRunner };
+} else {
+	process.on("SIGINT", () => shutdown("SIGINT"));
+	process.on("SIGTERM", () => shutdown("SIGTERM"));
+}
+
+void startRunner();

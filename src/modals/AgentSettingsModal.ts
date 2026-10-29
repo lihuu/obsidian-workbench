@@ -62,12 +62,48 @@ export class AgentSettingsModal extends Modal {
 			type: "password",
 		});
 		tokenInput.value = settings.runnerToken;
-		tokenInput.placeholder = "Only if WORKBENCH_RUNNER_TOKEN is set";
+		tokenInput.placeholder = "Required for remote Runner URLs";
 		tokenInput.id = `wb-agent-token-${Date.now()}`;
 		tokenLabel.htmlFor = tokenInput.id;
 		urlField.createDiv({
 			cls: "wb-field-hint",
-			text: "Start it with `npm run runner` in the Workbench source directory.",
+			text: "Desktop starts the bundled local Runner automatically. Set a remote URL/token for Cloudflare or another Runner.",
+		});
+
+		this.contentEl.createDiv({
+			cls: "wb-agent-section-title",
+			text: "Cloudflare Access service token (remote Runner)",
+		});
+		const accessIdField = this.contentEl.createDiv({ cls: "wb-field" });
+		const accessIdLabel = accessIdField.createEl("label", {
+			cls: "wb-field-label",
+			text: "CF-Access-Client-Id",
+		});
+		const accessIdInput = accessIdField.createEl("input", {
+			cls: "wb-input",
+			type: "text",
+		});
+		accessIdInput.value = settings.cfAccessClientId;
+		accessIdInput.placeholder = "Service token client ID";
+		accessIdInput.id = `wb-agent-cf-id-${Date.now()}`;
+		accessIdLabel.htmlFor = accessIdInput.id;
+
+		const accessSecretField = this.contentEl.createDiv({ cls: "wb-field" });
+		const accessSecretLabel = accessSecretField.createEl("label", {
+			cls: "wb-field-label",
+			text: "CF-Access-Client-Secret",
+		});
+		const accessSecretInput = accessSecretField.createEl("input", {
+			cls: "wb-input",
+			type: "password",
+		});
+		accessSecretInput.value = settings.cfAccessClientSecret;
+		accessSecretInput.placeholder = "Service token client secret";
+		accessSecretInput.id = `wb-agent-cf-secret-${Date.now()}`;
+		accessSecretLabel.htmlFor = accessSecretInput.id;
+		accessSecretField.createDiv({
+			cls: "wb-field-hint",
+			text: "Cloudflare Zero Trust → Access → Service Token. Use both fields together; remote URLs also require HTTPS and a Runner token.",
 		});
 
 		this.contentEl.createDiv({
@@ -420,6 +456,8 @@ export class AgentSettingsModal extends Modal {
 				.checkConnection({
 					runnerUrl: urlInput.value,
 					runnerToken: tokenInput.value,
+					cfAccessClientId: accessIdInput.value,
+					cfAccessClientSecret: accessSecretInput.value,
 					workspacePath: source === "local" ? localInput.value : undefined,
 				})
 				.then(({ health, workspace }) => {
@@ -511,6 +549,8 @@ export class AgentSettingsModal extends Modal {
 				await this.agent.saveConnection({
 					runnerUrl: urlInput.value,
 					runnerToken: tokenInput.value,
+					cfAccessClientId: accessIdInput.value,
+					cfAccessClientSecret: accessSecretInput.value,
 				});
 
 				if (source === "local") {

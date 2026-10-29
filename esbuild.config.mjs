@@ -58,9 +58,28 @@ const context = await esbuild.context({
 	],
 });
 
+// Desktop-only embedded Runner. It is loaded lazily by the plugin on desktop
+// and never imported into the mobile bundle.
+const runnerContext = await esbuild.context({
+	banner: {
+		js: banner,
+	},
+	entryPoints: ["runner/server.mjs"],
+	bundle: true,
+	external: [...builtinModules, ...builtinModules.map((name) => `node:${name}`)],
+	format: "cjs",
+	target: "node20",
+	logLevel: "info",
+	sourcemap: false,
+	treeShaking: true,
+	outfile: "runner.cjs",
+	minify: prod,
+	platform: "node",
+});
+
 if (prod) {
-	await context.rebuild();
-	await context.dispose();
+	await Promise.all([context.rebuild(), runnerContext.rebuild()]);
+	await Promise.all([context.dispose(), runnerContext.dispose()]);
 } else {
-	await context.watch();
+	await Promise.all([context.watch(), runnerContext.watch()]);
 }

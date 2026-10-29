@@ -9,6 +9,7 @@ import {
 	RunnerClient,
 	normalizeRunnerUrl,
 } from "./runner-client";
+import { validateRunnerConnection } from "./runner-connection";
 import {
 	buildRunHistory,
 	mergeRunIntoHistory,
@@ -75,7 +76,13 @@ function toView(page: RunnerPage, previous?: RunView): RunView {
 
 export class AgentController implements Readable<AgentSnapshot> {
 	private readonly state = writable<AgentSnapshot>(
-		createInitialSnapshot({ runnerUrl: "", runnerToken: "", workspaces: {} })
+		createInitialSnapshot({
+			runnerUrl: "",
+			runnerToken: "",
+			cfAccessClientId: "",
+			cfAccessClientSecret: "",
+			workspaces: {},
+		})
 	);
 	readonly subscribe = this.state.subscribe;
 
@@ -97,6 +104,8 @@ export class AgentController implements Readable<AgentSnapshot> {
 			createInitialSnapshot({
 				runnerUrl: initial.runnerUrl,
 				runnerToken: initial.runnerToken,
+				cfAccessClientId: initial.cfAccessClientId,
+				cfAccessClientSecret: initial.cfAccessClientSecret,
 				workspaces: initial.workspaces,
 			})
 		);
@@ -105,6 +114,8 @@ export class AgentController implements Readable<AgentSnapshot> {
 			return {
 				runnerUrl: settings.runnerUrl,
 				runnerToken: settings.runnerToken,
+				cfAccessClientId: settings.cfAccessClientId,
+				cfAccessClientSecret: settings.cfAccessClientSecret,
 			};
 		});
 	}
@@ -153,12 +164,16 @@ export class AgentController implements Readable<AgentSnapshot> {
 	async checkConnection(input: {
 		runnerUrl: string;
 		runnerToken: string;
+		cfAccessClientId?: string;
+		cfAccessClientSecret?: string;
 		workspacePath?: string;
 	}): Promise<{ health: RunnerHealth; workspace: WorkspaceInfo | null }> {
 		const runnerUrl = normalizeRunnerUrl(input.runnerUrl);
 		const client = new RunnerClient(() => ({
 			runnerUrl,
 			runnerToken: input.runnerToken,
+			cfAccessClientId: input.cfAccessClientId ?? "",
+			cfAccessClientSecret: input.cfAccessClientSecret ?? "",
 		}));
 		const health = await client.health();
 		const workspace = input.workspacePath?.trim()
@@ -167,12 +182,38 @@ export class AgentController implements Readable<AgentSnapshot> {
 		return { health, workspace };
 	}
 
-	async saveConnection(input: { runnerUrl: string; runnerToken: string }): Promise<void> {
+	async saveConnection(input: {
+		runnerUrl: string;
+		runnerToken: string;
+		cfAccessClientId: string;
+		cfAccessClientSecret: string;
+	}): Promise<void> {
 		const runnerUrl = normalizeRunnerUrl(input.runnerUrl);
 		const runnerToken = input.runnerToken.trim();
+		const cfAccessClientId = input.cfAccessClientId.trim();
+		const cfAccessClientSecret = input.cfAccessClientSecret.trim();
+		validateRunnerConnection({
+			runnerUrl,
+			runnerToken,
+			cfAccessClientId,
+			cfAccessClientSecret,
+		});
 		const current = get(this.state).settings;
-		this.patch({ settings: { ...current, runnerUrl, runnerToken } });
-		await this.deviceState.save({ runnerUrl, runnerToken });
+		this.patch({
+			settings: {
+				...current,
+				runnerUrl,
+				runnerToken,
+				cfAccessClientId,
+				cfAccessClientSecret,
+			},
+		});
+		await this.deviceState.save({
+			runnerUrl,
+			runnerToken,
+			cfAccessClientId,
+			cfAccessClientSecret,
+		});
 		await this.refreshHealth();
 	}
 
@@ -477,14 +518,30 @@ export class AgentController implements Readable<AgentSnapshot> {
 		await this.deviceState.save({ workspaces });
 	}
 
+	private async ensureWorkspace(
+		board: Pick<Board, "id" | "name" | "agent">
+	): Promise<string> {
+		const existing = get(this.state).settings.workspaces[board.id];
+		if (existing) return existing;
+		const github = board.agent?.github;
+		if (github?.repoUrl) {
+			const workspace = await this.cloneGithubWorkspace(
+				board.id,
+				github.repoUrl,
+				github.branch
+			);
+			return workspace.path;
+		}
+		throw new Error(
+			"Set a local workspace or choose a GitHub repository for this board before running a task."
+		);
+	}
+
 	async buildContext(
 		board: Pick<Board, "id" | "name" | "agent">,
 		task: Task
 	): Promise<{ prompt: string; images: Awaited<ReturnType<typeof collectTaskImages>>; noteCount: number }> {
-		const workspace = get(this.state).settings.workspaces[board.id];
-		if (!workspace) {
-			throw new Error("Set a local workspace for this board before previewing a task.");
-		}
+		const workspace = await this.ensureWorkspace(board);
 		const [notes, images] = await Promise.all([
 			collectLinkedNotes(this.app, task.description),
 			collectTaskImages(this.app, task.description),
@@ -509,11 +566,7 @@ export class AgentController implements Readable<AgentSnapshot> {
 		board: Pick<Board, "id" | "name" | "agent">,
 		task: Task
 	): Promise<RunView> {
-		const settings = get(this.state).settings;
-		const workspace = settings.workspaces[board.id];
-		if (!workspace) {
-			throw new Error("Set a local workspace for this board before running a task.");
-		}
+		const workspace = await this.ensureWorkspace(board);
 		const key = taskRunKey(board.id, task.id);
 		const existing = get(this.state).runs[key];
 		if (existing && (existing.status === "queued" || existing.status === "running")) {
