@@ -629,7 +629,7 @@ export class AgentSettingsModal extends Modal {
 				const parts = [
 					summary.imported > 0 ? `imported ${summary.imported}` : "",
 					summary.updated > 0 ? `updated ${summary.updated}` : "",
-					summary.moved > 0 ? `moved ${summary.moved} to Done` : "",
+					summary.moved > 0 ? `moved ${summary.moved}` : "",
 				].filter(Boolean);
 				setStatus(
 					parts.length > 0

@@ -227,7 +227,7 @@ export class WorkbenchStore implements Readable<WorkbenchSnapshot> {
 		this.persistActiveBoard(nextId);
 	}
 
-	addColumn(boardId: string, name: string): Column {
+	addColumn(boardId: string, name: string, beforeColumnId?: string): Column {
 		const board = this.getBoard(boardId);
 		if (!board) throw new Error("Board not found.");
 		const trimmed = name.trim();
@@ -242,14 +242,47 @@ export class WorkbenchStore implements Readable<WorkbenchSnapshot> {
 		const column: Column = { id: createId("c"), name: trimmed, tasks: [] };
 		this.updateBoard(
 			boardId,
-			(current) => ({
-				...current,
-				updatedAt: Date.now(),
-				columns: [...current.columns, column],
-			}),
+			(current) => {
+				const before = beforeColumnId
+					? current.columns.findIndex((candidate) => candidate.id === beforeColumnId)
+					: -1;
+				const columns = [...current.columns];
+				if (before >= 0) columns.splice(before, 0, column);
+				else columns.push(column);
+				return {
+					...current,
+					updatedAt: Date.now(),
+					columns,
+				};
+			},
 			true
 		);
 		return column;
+	}
+
+	moveColumn(boardId: string, columnId: string, beforeColumnId: string): boolean {
+		const board = this.getBoard(boardId);
+		if (!board || columnId === beforeColumnId) return false;
+		const column = board.columns.find((candidate) => candidate.id === columnId);
+		const before = board.columns.findIndex(
+			(candidate) => candidate.id === beforeColumnId
+		);
+		if (!column || before < 0) return false;
+		const from = board.columns.findIndex((candidate) => candidate.id === columnId);
+		if (from < 0) return false;
+		// Already before the target: nothing to do.
+		if (from < before) return false;
+		this.updateBoard(
+			boardId,
+			(current) => {
+				const next = current.columns.filter((candidate) => candidate.id !== columnId);
+				const target = next.findIndex((candidate) => candidate.id === beforeColumnId);
+				next.splice(target >= 0 ? target : next.length, 0, column);
+				return { ...current, updatedAt: Date.now(), columns: next };
+			},
+			true
+		);
+		return true;
 	}
 
 	renameColumn(boardId: string, columnId: string, name: string): void {
