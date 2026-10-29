@@ -40,6 +40,7 @@ const HEALTH_DELAY_MS = 250;
 export class LocalRunnerManager {
 	private module: RunnerModule | undefined;
 	private starting: Promise<void> | undefined;
+	private owns = false;
 
 	constructor(
 		private readonly app: App,
@@ -52,7 +53,10 @@ export class LocalRunnerManager {
 		if (this.starting) return this.starting;
 		if (!this.module) this.adoptCachedRunner();
 		if (this.module) {
-			if (await this.isHealthy(settings)) return;
+			// A cached module may be from the previous plugin build. Restart it
+			// once so plugin updates pick up the new runner.cjs. A standalone
+			// Runner has no cached module and is never stopped here.
+			if (this.owns && (await this.isHealthy(settings))) return;
 			await this.stop();
 		}
 
@@ -85,6 +89,7 @@ export class LocalRunnerManager {
 		await this.stopModule(runner);
 		delete embedded.__workbenchRunner;
 		this.module = undefined;
+		this.owns = false;
 	}
 
 	private async stopModule(runner: RunnerModule): Promise<void> {
@@ -159,6 +164,7 @@ export class LocalRunnerManager {
 			throw new Error("runner.cjs did not export a Runner module.");
 		}
 		this.module = loaded;
+		this.owns = true;
 		await loaded.startRunner?.();
 		if (!(await this.waitForHealth(settings))) {
 			await this.stop();
