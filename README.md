@@ -1,4 +1,4 @@
-# Workbench
+# Workbench Kanban
 
 Local-first kanban boards for Obsidian. Board data lives in
 `Workbench/boards/<id>.json`; device-local runner settings and checkout paths
@@ -301,6 +301,26 @@ queued run. Deleting a task aborts its queued or running run first.
 
 Automatic moves are off when no mapping is configured. The UI applies mappings
 on live state transitions, not when loading old history.
+
+## Community plugin disclosures
+
+- **Network use.** The plugin talks to a local Node Runner at
+  `http://127.0.0.1:4319` by default. The Runner can clone GitHub repositories
+  and starts Pi, OMP, or OpenCode, which may contact their configured model
+  providers. These requests are required for the Agent features.
+- **Files outside the vault.** Agent features read and write configured
+  workspaces, Git worktrees under `~/Workbench/worktrees`, checkouts under
+  `~/Workbench/workspaces`, and session/run data under `~/.workbench`. Board
+  data itself stays inside the vault.
+- **Accounts and credentials.** The core kanban works without an account.
+  Agent backends may require their own provider account or API key. The plugin
+  does not require an Obsidian account or payment.
+- **Desktop and mobile.** The kanban UI loads on desktop and mobile. Agent
+  execution requires the desktop Node Runner and is unavailable on mobile.
+- **Privacy.** No telemetry or analytics are sent by the plugin. No ads and no
+  self-update mechanism are included.
+- **Trademark.** Workbench Kanban is an independent community project, not an
+  Obsidian first-party product.
 
 ### Data and security
 
