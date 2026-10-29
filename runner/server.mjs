@@ -180,7 +180,9 @@ async function gitInfo(cwd) {
 			maxBuffer: 1024 * 1024,
 		});
 		const topLevel = top.stdout.trim();
-		if (!topLevel) return { isGit: false, branch: "", topLevel: "" };
+		if (!topLevel) {
+			return { isGit: false, branch: "", topLevel: "", remoteUrl: "", githubRepo: "" };
+		}
 
 		let branch = "";
 		try {
@@ -205,9 +207,30 @@ async function gitInfo(cwd) {
 				branch = "";
 			}
 		}
-		return { isGit: true, branch, topLevel };
+		let remoteUrl = "";
+		for (const remote of ["origin", "upstream"]) {
+			try {
+				const result = await execFileAsync(
+					"git",
+					["-C", cwd, "remote", "get-url", remote],
+					{ encoding: "utf8", timeout: 5_000, maxBuffer: 1024 * 1024 }
+				);
+				remoteUrl = result.stdout.trim();
+				if (remoteUrl) break;
+			} catch {
+				// Try the next remote.
+			}
+		}
+		const github = parseGitHubRepo(remoteUrl);
+		return {
+			isGit: true,
+			branch,
+			topLevel,
+			remoteUrl,
+			githubRepo: github ? `${github.owner}/${github.repo}` : "",
+		};
 	} catch {
-		return { isGit: false, branch: "", topLevel: "" };
+		return { isGit: false, branch: "", topLevel: "", remoteUrl: "", githubRepo: "" };
 	}
 }
 

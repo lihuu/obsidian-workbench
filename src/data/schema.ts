@@ -196,6 +196,13 @@ function parseAgent(value: unknown, path: string): BoardAgentConfig | undefined 
 		if (!backend) throw new BoardDataError(path, "agent.backend is empty.");
 		agent.backend = backend;
 	}
+	if (value.source !== undefined) {
+		const source = readString(value.source, "agent.source", path);
+		if (source !== "local" && source !== "github") {
+			throw new BoardDataError(path, "agent.source must be local or github.");
+		}
+		agent.source = source;
+	}
 	if (value.github !== undefined) {
 		if (!isRecord(value.github)) {
 			throw new BoardDataError(path, "agent.github must be an object.");
@@ -280,6 +287,9 @@ export function serializeBoard(board: Board): string {
 					agent: {
 						...(board.agent.backend
 							? { backend: board.agent.backend }
+							: {}),
+						...(board.agent.source
+							? { source: board.agent.source }
 							: {}),
 						...(board.agent.github
 							? {

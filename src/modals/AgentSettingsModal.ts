@@ -2,7 +2,11 @@ import { App, Modal, Notice, Platform, TFile } from "obsidian";
 import type { AgentController } from "../agent/controller";
 import type { Board, BoardAgentConfig } from "../data/types";
 import type { WorkbenchStore } from "../data/store";
-import { collectGitHubRefs, importGitHubItems } from "../agent/github";
+import {
+	collectGitHubRefs,
+	githubRepoUrl,
+	importGitHubItems,
+} from "../agent/github";
 import { pickDirectory } from "../ui/directory-picker";
 
 type SourceKind = "local" | "github";
@@ -26,20 +30,31 @@ export class AgentSettingsModal extends Modal {
 		const snapshot = this.agent.getSnapshot();
 		const settings = snapshot.settings;
 		const github = this.board.agent?.github;
-		let source: SourceKind = github ? "github" : "local";
+		let source: SourceKind =
+			this.board.agent?.source ?? (github ? "github" : "local");
+		let localGithubRepoUrl = source === "local" ? (github?.repoUrl ?? "") : "";
+		let localWorkspaceIsGit = source === "github";
+		let localWorkspaceKnown = false;
 		let syncButton: HTMLButtonElement | undefined;
+		let gitSection: HTMLElement | undefined;
+		let localGithubHint: HTMLElement | undefined;
+		let refreshGitUi = () => {};
+		let inspectLocalWorkspace = async () => {};
 
 		this.contentEl.createDiv({
 			cls: "wb-agent-intro",
 			text: `Run agent tasks for "${this.board.name}". Board source settings sync with the board; checkout paths and runner settings stay on this device.`,
 		});
 
-		this.contentEl.createDiv({
+		const connectionSection = this.contentEl.createDiv({
+			cls: "wb-agent-connection-section",
+		});
+		connectionSection.createDiv({
 			cls: "wb-agent-section-title",
 			text: "Runner connection (global)",
 		});
 
-		const urlField = this.contentEl.createDiv({ cls: "wb-field" });
+		const urlField = connectionSection.createDiv({ cls: "wb-field" });
 		const urlLabel = urlField.createEl("label", {
 			cls: "wb-field-label",
 			text: "Runner URL",
@@ -53,7 +68,7 @@ export class AgentSettingsModal extends Modal {
 		urlInput.id = `wb-agent-url-${Date.now()}`;
 		urlLabel.htmlFor = urlInput.id;
 
-		const tokenField = this.contentEl.createDiv({ cls: "wb-field" });
+		const tokenField = connectionSection.createDiv({ cls: "wb-field" });
 		const tokenLabel = tokenField.createEl("label", {
 			cls: "wb-field-label",
 			text: "Runner token (optional)",
@@ -71,11 +86,11 @@ export class AgentSettingsModal extends Modal {
 			text: "Desktop starts the bundled local Runner automatically. Set a remote URL/token for Cloudflare or another Runner.",
 		});
 
-		this.contentEl.createDiv({
+		connectionSection.createDiv({
 			cls: "wb-agent-section-title",
 			text: "Cloudflare Access service token (remote Runner)",
 		});
-		const accessIdField = this.contentEl.createDiv({ cls: "wb-field" });
+		const accessIdField = connectionSection.createDiv({ cls: "wb-field" });
 		const accessIdLabel = accessIdField.createEl("label", {
 			cls: "wb-field-label",
 			text: "CF-Access-Client-Id",
@@ -89,7 +104,7 @@ export class AgentSettingsModal extends Modal {
 		accessIdInput.id = `wb-agent-cf-id-${Date.now()}`;
 		accessIdLabel.htmlFor = accessIdInput.id;
 
-		const accessSecretField = this.contentEl.createDiv({ cls: "wb-field" });
+		const accessSecretField = connectionSection.createDiv({ cls: "wb-field" });
 		const accessSecretLabel = accessSecretField.createEl("label", {
 			cls: "wb-field-label",
 			text: "CF-Access-Client-Secret",
@@ -242,6 +257,9 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-field-hint",
 			text: "The Runner validates this folder. Leave empty to clear it.",
 		});
+		localGithubHint = localField.createDiv({
+			cls: "wb-field-hint wb-agent-github-hint",
+		});
 
 		const githubField = this.contentEl.createDiv({ cls: "wb-field" });
 		const repoLabel = githubField.createEl("label", {
@@ -289,11 +307,15 @@ export class AgentSettingsModal extends Modal {
 		const updateVisibility = () => {
 			localField.hidden = source !== "local";
 			githubField.hidden = source !== "github";
-			if (syncButton) syncButton.hidden = source !== "github";
+			refreshGitUi();
 		};
 		sourceSelect.addEventListener("change", () => {
 			source = sourceSelect.value === "github" ? "github" : "local";
 			updateVisibility();
+			void inspectLocalWorkspace();
+		});
+		localInput.addEventListener("change", () => {
+			void inspectLocalWorkspace();
 		});
 		updateVisibility();
 
@@ -372,11 +394,12 @@ export class AgentSettingsModal extends Modal {
 			text: "Off by default. Cancelled runs are never moved.",
 		});
 
-		this.contentEl.createDiv({
+		gitSection = this.contentEl.createDiv({ cls: "wb-agent-git-section" });
+		gitSection.createDiv({
 			cls: "wb-agent-section-title",
 			text: "Run isolation",
 		});
-		const worktreeField = this.contentEl.createDiv({ cls: "wb-field wb-checkbox-field" });
+		const worktreeField = gitSection.createDiv({ cls: "wb-field wb-checkbox-field" });
 		const worktreeLabel = worktreeField.createEl("label", {
 			cls: "wb-checkbox-label",
 		});
@@ -387,6 +410,71 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-field-hint",
 			text: "Requires a clean git workspace. Creates branch wb/<runId> under the Runner's worktrees directory and enables parallel runs.",
 		});
+
+		this.contentEl.appendChild(connectionSection);
+
+		refreshGitUi = () => {
+			const gitAvailable =
+				source === "github" || (source === "local" && localWorkspaceIsGit);
+			if (gitSection) gitSection.hidden = !gitAvailable;
+			if (!gitAvailable && localWorkspaceKnown) worktreeInput.checked = false;
+
+			if (localGithubHint) {
+				localGithubHint.hidden = source !== "local";
+				if (source === "local") {
+					const repo = localGithubRepoUrl
+						.replace(/^https:\/\/github\.com\//i, "")
+						.replace(/\.git$/i, "");
+					localGithubHint.setText(
+						!localInput.value.trim()
+							? "Choose a Git workspace to detect its GitHub origin."
+							: !localWorkspaceKnown
+								? "Checking the workspace Git remote…"
+								: localWorkspaceIsGit && repo
+									? `GitHub origin: ${repo} · Sync GitHub is available.`
+									: localWorkspaceIsGit
+										? "Git repository detected, but no GitHub origin."
+										: "Not a Git repository. Git options are hidden."
+					);
+				}
+			}
+			if (syncButton) {
+				syncButton.hidden =
+					source === "github" ? false : !localGithubRepoUrl;
+			}
+		};
+
+		inspectLocalWorkspace = async () => {
+			if (source !== "local") {
+				localWorkspaceKnown = true;
+				localWorkspaceIsGit = true;
+				refreshGitUi();
+				return;
+			}
+			const path = localInput.value.trim();
+			if (!path) {
+				localWorkspaceKnown = false;
+				localWorkspaceIsGit = false;
+				localGithubRepoUrl = "";
+				refreshGitUi();
+				return;
+			}
+			localWorkspaceKnown = false;
+			refreshGitUi();
+			try {
+				const workspace = await this.agent.inspectWorkspace(path);
+				localWorkspaceKnown = true;
+				localWorkspaceIsGit = workspace.isGit;
+				localGithubRepoUrl = workspace.githubRepo
+					? githubRepoUrl(workspace.githubRepo)
+					: "";
+			} catch {
+				localWorkspaceKnown = false;
+				localWorkspaceIsGit = false;
+				localGithubRepoUrl = "";
+			}
+			refreshGitUi();
+		};
 
 		const statusEl = this.contentEl.createDiv({ cls: "wb-agent-status" });
 		const statusDot = statusEl.createSpan({ cls: "wb-agent-dot" });
@@ -521,7 +609,8 @@ export class AgentSettingsModal extends Modal {
 			setBusy(true);
 			setStatus("Syncing GitHub…", "checking");
 			void (async () => {
-				const repoUrl = repoInput.value.trim();
+				const repoUrl =
+					source === "github" ? repoInput.value.trim() : localGithubRepoUrl;
 				if (!repoUrl) throw new Error("GitHub repository URL can't be empty.");
 				const current = this.store
 					.getSnapshot()
@@ -590,7 +679,7 @@ export class AgentSettingsModal extends Modal {
 					throw new Error("GitHub repository URL can't be empty.");
 				}
 
-				const agentConfig: BoardAgentConfig = {};
+				const agentConfig: BoardAgentConfig = { source };
 				if (backendSelect.value) agentConfig.backend = backendSelect.value;
 				if (source === "github") {
 					agentConfig.github = {
@@ -623,10 +712,33 @@ export class AgentSettingsModal extends Modal {
 				if (source === "local") {
 					const path = localInput.value.trim();
 					if (path) {
-						await this.agent.bindWorkspace(this.board.id, path);
+						const workspace = await this.agent.bindWorkspace(
+							this.board.id,
+							path
+						);
+						localWorkspaceKnown = true;
+						localWorkspaceIsGit = workspace.isGit;
+						localGithubRepoUrl = workspace.githubRepo
+							? githubRepoUrl(workspace.githubRepo)
+							: "";
 					} else {
 						await this.agent.clearWorkspace(this.board.id);
+						localWorkspaceKnown = true;
+						localWorkspaceIsGit = false;
+						localGithubRepoUrl = "";
 					}
+					refreshGitUi();
+					const finalConfig: BoardAgentConfig = { ...agentConfig };
+					if (localGithubRepoUrl) {
+						finalConfig.github = {
+							repoUrl: localGithubRepoUrl,
+							branch: "",
+						};
+					} else {
+						delete finalConfig.github;
+					}
+					if (!localWorkspaceIsGit) delete finalConfig.worktree;
+					this.store.setBoardAgent(this.board.id, finalConfig);
 				} else {
 					await this.agent.cloneGithubWorkspace(
 						this.board.id,
@@ -645,5 +757,7 @@ export class AgentSettingsModal extends Modal {
 				setBusy(false);
 			});
 		});
+
+		void inspectLocalWorkspace();
 	}
 }
