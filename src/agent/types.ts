@@ -159,6 +159,8 @@ export interface WorkspaceInfo {
 	isGit: boolean;
 	branch: string;
 	topLevel: string;
+	remoteUrl: string;
+	githubRepo: string;
 }
 
 export interface GitHubWorkspaceInfo extends WorkspaceInfo {

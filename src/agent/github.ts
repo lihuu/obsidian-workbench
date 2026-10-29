@@ -1,4 +1,4 @@
-import type { Board, Task, TaskGitHubLink, TaskPatch } from "../data/types";
+import type { Board, Column, Task, TaskGitHubLink, TaskPatch } from "../data/types";
 import type {
 	GitHubChecks,
 	GitHubImportResult,
@@ -8,6 +8,8 @@ import type {
 } from "./types";
 
 interface GitHubTaskStore {
+	addColumn?(boardId: string, name: string, beforeColumnId?: string): Column;
+	moveColumn?(boardId: string, columnId: string, beforeColumnId: string): boolean;
 	addTask(boardId: string, columnId: string, title: string): Task;
 	updateTask(boardId: string, taskId: string, patch: TaskPatch): void;
 	moveTask?(boardId: string, taskId: string, columnId: string): boolean;
@@ -32,6 +34,29 @@ export function importGitHubItems(
 		board.columns[board.columns.length - 1];
 	if (!target) return { imported: 0, updated: 0, moved: 0, skipped: 0 };
 
+	const columns = new Map(
+		board.columns.map((column) => [column.name.trim().toLowerCase(), column])
+	);
+	const ensureColumn = (
+		name: string,
+		fallback: Column | undefined,
+		beforeColumnId?: string
+	) => {
+		const existing = columns.get(name.toLowerCase());
+		if (existing) {
+			if (beforeColumnId) {
+				store.moveColumn?.(board.id, existing.id, beforeColumnId);
+			}
+			return existing;
+		}
+		const created = store.addColumn?.(board.id, name, beforeColumnId);
+		if (created) columns.set(name.toLowerCase(), created);
+		return created ?? fallback;
+	};
+	const issueColumn = () => ensureColumn("Issue", target, done?.id);
+	const prColumn = () => ensureColumn("PR", target, done?.id);
+	const mergedColumn = () => ensureColumn("Merged", done, done?.id);
+
 	const existing = new Map<string, ExistingTask>();
 	for (const column of board.columns) {
 		for (const task of column.tasks) {
@@ -54,17 +79,23 @@ export function importGitHubItems(
 		const current = existing.get(key);
 		if (current) {
 			summary.updated += 1;
-			if (
-				updateOne(
-					store,
-					board.id,
-					current,
-					result.repo,
-					type,
-					item,
-					done?.id
-				)
-			) {
+			updateOne(store, board.id, current, result.repo, type, item);
+			const preferred =
+				type === "issue"
+					? item.state.toUpperCase() === "CLOSED"
+						? done
+						: issueColumn()
+					: item.state.toUpperCase() === "MERGED"
+						? mergedColumn()
+						: prColumn();
+			const shouldMove =
+				preferred &&
+				preferred.id !== current.columnId &&
+				((type === "issue" && item.state.toUpperCase() === "CLOSED") ||
+					(type === "pull_request" && item.state.toUpperCase() === "MERGED") ||
+					current.columnId === target.id);
+			if (shouldMove && store.moveTask?.(board.id, current.task.id, preferred.id)) {
+				current.columnId = preferred.id;
 				summary.moved += 1;
 			}
 			return;
@@ -73,8 +104,10 @@ export function importGitHubItems(
 			summary.skipped += 1;
 			return;
 		}
-		const task = importOne(store, board.id, target.id, result.repo, type, item);
-		existing.set(key, { task, columnId: target.id });
+		const destination = type === "issue" ? issueColumn() : prColumn();
+		if (!destination) return;
+		const task = importOne(store, board.id, destination.id, result.repo, type, item);
+		existing.set(key, { task, columnId: destination.id });
 		summary.imported += 1;
 	};
 
@@ -109,11 +142,10 @@ function updateOne(
 	current: ExistingTask,
 	repo: string,
 	type: "issue" | "pull_request",
-	item: GitHubSyncItem,
-	doneColumnId: string | undefined
-): boolean {
+	item: GitHubSyncItem
+): void {
 	const previous = current.task.github;
-	if (!previous) return false;
+	if (!previous) return;
 	const title = item.title.trim() || current.task.title;
 	const description = buildGitHubDescription(repo, type, item);
 	const patch: TaskPatch = {
@@ -136,15 +168,6 @@ function updateOne(
 	}
 
 	store.updateTask(boardId, current.task.id, patch);
-	if (
-		isDone(type, item) &&
-		doneColumnId &&
-		current.columnId !== doneColumnId &&
-		store.moveTask?.(boardId, current.task.id, doneColumnId)
-	) {
-		return true;
-	}
-	return false;
 }
 
 export function githubRepoUrl(repo: string): string {
@@ -158,6 +181,9 @@ export function collectGitHubRefs(board: Board): GitHubSyncRef[] {
 	for (const column of board.columns) {
 		for (const task of column.tasks) {
 			if (!task.github) continue;
+			// Only follow tasks that were OPEN at the last sync. Historical
+			// closed/merged items must not be re-fetched into the board.
+			if (task.github.state.toUpperCase() !== "OPEN") continue;
 			const key = `${task.github.repo}|${task.github.type}|${task.github.number}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
@@ -271,11 +297,6 @@ function toTaskGitHub(
 
 function isOpen(item: GitHubSyncItem): boolean {
 	return item.state.toUpperCase() === "OPEN";
-}
-
-function isDone(type: "issue" | "pull_request", item: GitHubSyncItem): boolean {
-	const state = item.state.toUpperCase();
-	return type === "issue" ? state === "CLOSED" : state === "MERGED";
 }
 
 function itemUrl(

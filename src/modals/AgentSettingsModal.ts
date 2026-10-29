@@ -1,8 +1,13 @@
-import { App, Modal, Notice, TFile } from "obsidian";
+import { App, Modal, Notice, Platform } from "obsidian";
 import type { AgentController } from "../agent/controller";
 import type { Board, BoardAgentConfig } from "../data/types";
 import type { WorkbenchStore } from "../data/store";
-import { collectGitHubRefs, importGitHubItems } from "../agent/github";
+import {
+	collectGitHubRefs,
+	githubRepoUrl,
+	importGitHubItems,
+} from "../agent/github";
+import { pickDirectory } from "../ui/directory-picker";
 
 type SourceKind = "local" | "github";
 
@@ -19,26 +24,38 @@ export class AgentSettingsModal extends Modal {
 	onOpen(): void {
 		this.setTitle("Workbench agent");
 		this.modalEl.addClass("wb-modal");
+		this.modalEl.addClass("wb-agent-modal");
 		this.contentEl.addClass("wb-modal-content");
 		this.contentEl.empty();
 
 		const snapshot = this.agent.getSnapshot();
 		const settings = snapshot.settings;
 		const github = this.board.agent?.github;
-		let source: SourceKind = github ? "github" : "local";
+		let source: SourceKind =
+			this.board.agent?.source ?? (github ? "github" : "local");
+		let localGithubRepoUrl = source === "local" ? (github?.repoUrl ?? "") : "";
+		let localWorkspaceIsGit = source === "github";
+		let localWorkspaceKnown = false;
 		let syncButton: HTMLButtonElement | undefined;
+		let gitSection: HTMLElement | undefined;
+		let localGithubHint: HTMLElement | undefined;
+		let refreshGitUi = () => {};
+		let inspectLocalWorkspace = async () => {};
 
 		this.contentEl.createDiv({
 			cls: "wb-agent-intro",
 			text: `Run agent tasks for "${this.board.name}". Board source settings sync with the board; checkout paths and runner settings stay on this device.`,
 		});
 
-		this.contentEl.createDiv({
+		const connectionSection = this.contentEl.createDiv({
+			cls: "wb-agent-connection-section",
+		});
+		connectionSection.createDiv({
 			cls: "wb-agent-section-title",
 			text: "Runner connection (global)",
 		});
 
-		const urlField = this.contentEl.createDiv({ cls: "wb-field" });
+		const urlField = connectionSection.createDiv({ cls: "wb-field" });
 		const urlLabel = urlField.createEl("label", {
 			cls: "wb-field-label",
 			text: "Runner URL",
@@ -52,7 +69,7 @@ export class AgentSettingsModal extends Modal {
 		urlInput.id = `wb-agent-url-${Date.now()}`;
 		urlLabel.htmlFor = urlInput.id;
 
-		const tokenField = this.contentEl.createDiv({ cls: "wb-field" });
+		const tokenField = connectionSection.createDiv({ cls: "wb-field" });
 		const tokenLabel = tokenField.createEl("label", {
 			cls: "wb-field-label",
 			text: "Runner token (optional)",
@@ -70,11 +87,11 @@ export class AgentSettingsModal extends Modal {
 			text: "Desktop starts the bundled local Runner automatically. Set a remote URL/token for Cloudflare or another Runner.",
 		});
 
-		this.contentEl.createDiv({
+		connectionSection.createDiv({
 			cls: "wb-agent-section-title",
 			text: "Cloudflare Access service token (remote Runner)",
 		});
-		const accessIdField = this.contentEl.createDiv({ cls: "wb-field" });
+		const accessIdField = connectionSection.createDiv({ cls: "wb-field" });
 		const accessIdLabel = accessIdField.createEl("label", {
 			cls: "wb-field-label",
 			text: "CF-Access-Client-Id",
@@ -88,7 +105,7 @@ export class AgentSettingsModal extends Modal {
 		accessIdInput.id = `wb-agent-cf-id-${Date.now()}`;
 		accessIdLabel.htmlFor = accessIdInput.id;
 
-		const accessSecretField = this.contentEl.createDiv({ cls: "wb-field" });
+		const accessSecretField = connectionSection.createDiv({ cls: "wb-field" });
 		const accessSecretLabel = accessSecretField.createEl("label", {
 			cls: "wb-field-label",
 			text: "CF-Access-Client-Secret",
@@ -104,6 +121,13 @@ export class AgentSettingsModal extends Modal {
 		accessSecretField.createDiv({
 			cls: "wb-field-hint",
 			text: "Cloudflare Zero Trust → Access → Service Token. Use both fields together; remote URLs also require HTTPS and a Runner token.",
+		});
+		const connectionActions = connectionSection.createDiv({
+			cls: "wb-agent-inline-actions",
+		});
+		const testButton = connectionActions.createEl("button", {
+			cls: "wb-button wb-button--small",
+			text: "Test connection",
 		});
 
 		this.contentEl.createDiv({
@@ -203,7 +227,8 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-field-label",
 			text: "Local workspace",
 		});
-		const localInput = localField.createEl("input", {
+		const localRow = localField.createDiv({ cls: "wb-field-row" });
+		const localInput = localRow.createEl("input", {
 			cls: "wb-input",
 			type: "text",
 		});
@@ -211,9 +236,44 @@ export class AgentSettingsModal extends Modal {
 		localInput.placeholder = "~/Obsidian/obsidian-workbench";
 		localInput.id = `wb-agent-local-${Date.now()}`;
 		localLabel.htmlFor = localInput.id;
+		if (Platform.isDesktopApp && Platform.isMacOS) {
+			const browseButton = localRow.createEl("button", {
+				cls: "wb-button wb-button--small",
+				text: "Choose…",
+				attr: { type: "button", "aria-label": "Choose local workspace folder" },
+			});
+			browseButton.addEventListener("click", () => {
+				browseButton.disabled = true;
+				void pickDirectory("Select Workbench local workspace")
+					.then((path) => {
+						if (!path) return;
+						localInput.value = path;
+					})
+					.catch((error) => {
+						new Notice(
+							`Could not choose folder: ${
+								error instanceof Error ? error.message : String(error)
+							}`
+						);
+					})
+					.finally(() => {
+						browseButton.disabled = false;
+					});
+			});
+		}
 		localField.createDiv({
 			cls: "wb-field-hint",
 			text: "The Runner validates this folder. Leave empty to clear it.",
+		});
+		localGithubHint = localField.createDiv({
+			cls: "wb-field-hint wb-agent-github-hint",
+		});
+		const localActions = localField.createDiv({
+			cls: "wb-agent-inline-actions",
+		});
+		const clearButton = localActions.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small",
+			text: "Clear workspace",
 		});
 
 		const githubField = this.contentEl.createDiv({ cls: "wb-field" });
@@ -249,6 +309,18 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-field-hint",
 			text: "System git credentials/SSH are used; no token is stored in the board.",
 		});
+		const githubActions = this.contentEl.createDiv({
+			cls: "wb-agent-inline-actions",
+		});
+		githubActions.createSpan({
+			cls: "wb-field-hint",
+			text: "GitHub issues / pull requests",
+		});
+		const syncButtonEl = githubActions.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small",
+			text: "Sync GitHub",
+		});
+		syncButton = syncButtonEl;
 
 		const checkoutEl = this.contentEl.createDiv({
 			cls: "wb-agent-checkout",
@@ -262,13 +334,38 @@ export class AgentSettingsModal extends Modal {
 		const updateVisibility = () => {
 			localField.hidden = source !== "local";
 			githubField.hidden = source !== "github";
-			if (syncButton) syncButton.hidden = source !== "github";
+			refreshGitUi();
 		};
 		sourceSelect.addEventListener("change", () => {
 			source = sourceSelect.value === "github" ? "github" : "local";
 			updateVisibility();
+			void inspectLocalWorkspace();
+		});
+		localInput.addEventListener("change", () => {
+			void inspectLocalWorkspace();
 		});
 		updateVisibility();
+
+		const columnId = (...names: string[]) => {
+			for (const name of names) {
+				const column = this.board.columns.find(
+					(candidate) =>
+						candidate.name.trim().toLowerCase() === name.toLowerCase()
+				);
+				if (column) return column.id;
+			}
+			return "";
+		};
+		const defaultQueue = columnId("Queue", "Inbox", "Backlog", "Todo") ||
+			this.board.columns[0]?.id || "";
+		const defaultRunning = columnId("Running", "Doing") ||
+			this.board.columns[1]?.id || this.board.columns[0]?.id || "";
+		const defaultSuccess = columnId("Done") ||
+			this.board.columns[this.board.columns.length - 1]?.id || "";
+		const defaultFailure = columnId("Failed", "Review", "Doing") ||
+			(this.board.columns[1]?.id !== defaultQueue
+				? this.board.columns[1]?.id
+				: "") || "";
 
 		this.contentEl.createDiv({
 			cls: "wb-agent-section-title",
@@ -295,12 +392,12 @@ export class AgentSettingsModal extends Modal {
 		};
 		const queuedSelect = makeColumnSelect(
 			"Queue",
-			this.board.agent?.runStateMapping?.queuedColumnId,
+			this.board.agent?.runStateMapping?.queuedColumnId ?? defaultQueue,
 			"queued"
 		);
 		const runningSelect = makeColumnSelect(
 			"Running",
-			this.board.agent?.runStateMapping?.runningColumnId,
+			this.board.agent?.runStateMapping?.runningColumnId ?? defaultRunning,
 			"running"
 		);
 		runStateField.createDiv({
@@ -321,8 +418,11 @@ export class AgentSettingsModal extends Modal {
 			successSelect.createEl("option", { value: column.id, text: column.name });
 		}
 		const successValue = this.board.agent?.statusMapping?.successColumnId;
-		successSelect.value = this.board.columns.some((column) => column.id === successValue)
-			? (successValue ?? "")
+		const successDefault = successValue ?? defaultSuccess;
+		successSelect.value = this.board.columns.some(
+			(column) => column.id === successDefault
+		)
+			? successDefault
 			: "";
 		successLabel.htmlFor = successSelect.id = `wb-agent-success-${Date.now()}`;
 
@@ -336,20 +436,30 @@ export class AgentSettingsModal extends Modal {
 			failureSelect.createEl("option", { value: column.id, text: column.name });
 		}
 		const failureValue = this.board.agent?.statusMapping?.failureColumnId;
-		failureSelect.value = this.board.columns.some((column) => column.id === failureValue)
-			? (failureValue ?? "")
+		const failureDefault = failureValue ?? defaultFailure;
+		failureSelect.value = this.board.columns.some(
+			(column) => column.id === failureDefault
+		)
+			? failureDefault
 			: "";
 		failureLabel.htmlFor = failureSelect.id = `wb-agent-failure-${Date.now()}`;
 		mappingField.createDiv({
 			cls: "wb-field-hint",
 			text: "Off by default. Cancelled runs are never moved.",
 		});
+		const recommendedName = (id: string) =>
+			this.board.columns.find((column) => column.id === id)?.name ?? "not set";
+		mappingField.createDiv({
+			cls: "wb-field-hint",
+			text: `Recommended: Queue → ${recommendedName(defaultQueue)}, Running → ${recommendedName(defaultRunning)}, Success → ${recommendedName(defaultSuccess)}, Failure → ${recommendedName(defaultFailure)}.`,
+		});
 
-		this.contentEl.createDiv({
+		gitSection = this.contentEl.createDiv({ cls: "wb-agent-git-section" });
+		gitSection.createDiv({
 			cls: "wb-agent-section-title",
 			text: "Run isolation",
 		});
-		const worktreeField = this.contentEl.createDiv({ cls: "wb-field wb-checkbox-field" });
+		const worktreeField = gitSection.createDiv({ cls: "wb-field wb-checkbox-field" });
 		const worktreeLabel = worktreeField.createEl("label", {
 			cls: "wb-checkbox-label",
 		});
@@ -360,6 +470,71 @@ export class AgentSettingsModal extends Modal {
 			cls: "wb-field-hint",
 			text: "Requires a clean git workspace. Creates branch wb/<runId> under the Runner's worktrees directory and enables parallel runs.",
 		});
+
+		this.contentEl.appendChild(connectionSection);
+
+		refreshGitUi = () => {
+			const gitAvailable =
+				source === "github" || (source === "local" && localWorkspaceIsGit);
+			if (gitSection) gitSection.hidden = !gitAvailable;
+			if (!gitAvailable && localWorkspaceKnown) worktreeInput.checked = false;
+
+			if (localGithubHint) {
+				localGithubHint.hidden = source !== "local";
+				if (source === "local") {
+					const repo = localGithubRepoUrl
+						.replace(/^https:\/\/github\.com\//i, "")
+						.replace(/\.git$/i, "");
+					localGithubHint.setText(
+						!localInput.value.trim()
+							? "Choose a Git workspace to detect its GitHub origin."
+							: !localWorkspaceKnown
+								? "Checking the workspace Git remote…"
+								: localWorkspaceIsGit && repo
+									? `GitHub origin: ${repo} · Sync GitHub is available.`
+									: localWorkspaceIsGit
+										? "Git repository detected, but no GitHub origin."
+										: "Not a Git repository. Git options are hidden."
+					);
+				}
+			}
+			if (syncButton) {
+				syncButton.hidden =
+					source === "github" ? false : !localGithubRepoUrl;
+			}
+		};
+
+		inspectLocalWorkspace = async () => {
+			if (source !== "local") {
+				localWorkspaceKnown = true;
+				localWorkspaceIsGit = true;
+				refreshGitUi();
+				return;
+			}
+			const path = localInput.value.trim();
+			if (!path) {
+				localWorkspaceKnown = false;
+				localWorkspaceIsGit = false;
+				localGithubRepoUrl = "";
+				refreshGitUi();
+				return;
+			}
+			localWorkspaceKnown = false;
+			refreshGitUi();
+			try {
+				const workspace = await this.agent.inspectWorkspace(path);
+				localWorkspaceKnown = true;
+				localWorkspaceIsGit = workspace.isGit;
+				localGithubRepoUrl = workspace.githubRepo
+					? githubRepoUrl(workspace.githubRepo)
+					: "";
+			} catch {
+				localWorkspaceKnown = false;
+				localWorkspaceIsGit = false;
+				localGithubRepoUrl = "";
+			}
+			refreshGitUi();
+		};
 
 		const statusEl = this.contentEl.createDiv({ cls: "wb-agent-status" });
 		const statusDot = statusEl.createSpan({ cls: "wb-agent-dot" });
@@ -401,27 +576,14 @@ export class AgentSettingsModal extends Modal {
 			void this.agent.refreshHealth().then(() => showHealth(this.agent.getSnapshot().health));
 		}
 
-		const footer = this.contentEl.createDiv({ cls: "wb-modal-footer" });
-		const helpButton = footer.createEl("button", {
-			cls: "wb-button wb-button--ghost",
-			text: "Help",
-		});
-		const testButton = footer.createEl("button", {
-			cls: "wb-button",
-			text: "Test connection",
-		});
-		const syncButtonEl = footer.createEl("button", {
-			cls: "wb-button wb-button--ghost",
-			text: "Sync GitHub",
-		});
-		syncButton = syncButtonEl;
-		updateVisibility();
-		const clearButton = footer.createEl("button", {
-			cls: "wb-button wb-button--ghost",
-			text: "Clear workspace",
+		const footer = this.modalEl.createDiv({
+			cls: "wb-modal-footer wb-agent-footer",
 		});
 		footer.createDiv({ cls: "wb-spacer" });
-		const cancelButton = footer.createEl("button", { cls: "wb-button", text: "Cancel" });
+		const cancelButton = footer.createEl("button", {
+			cls: "wb-button",
+			text: "Cancel",
+		});
 		const saveButton = footer.createEl("button", {
 			cls: "wb-button wb-button--primary",
 			text: "Save",
@@ -437,16 +599,6 @@ export class AgentSettingsModal extends Modal {
 			errorEl.setText(error instanceof Error ? error.message : String(error));
 			errorEl.show();
 		};
-
-		helpButton.addEventListener("click", () => {
-			const guide = this.app.vault.getAbstractFileByPath("Workbench/README.md");
-			if (guide instanceof TFile) {
-				void this.app.workspace.getLeaf("tab").openFile(guide);
-				window.setTimeout(() => this.close(), 100);
-			} else {
-				new Notice("Workbench/README.md not found.");
-			}
-		});
 
 		testButton.addEventListener("click", () => {
 			errorEl.hide();
@@ -494,7 +646,8 @@ export class AgentSettingsModal extends Modal {
 			setBusy(true);
 			setStatus("Syncing GitHub…", "checking");
 			void (async () => {
-				const repoUrl = repoInput.value.trim();
+				const repoUrl =
+					source === "github" ? repoInput.value.trim() : localGithubRepoUrl;
 				if (!repoUrl) throw new Error("GitHub repository URL can't be empty.");
 				const current = this.store
 					.getSnapshot()
@@ -509,7 +662,7 @@ export class AgentSettingsModal extends Modal {
 				const parts = [
 					summary.imported > 0 ? `imported ${summary.imported}` : "",
 					summary.updated > 0 ? `updated ${summary.updated}` : "",
-					summary.moved > 0 ? `moved ${summary.moved} to Done` : "",
+					summary.moved > 0 ? `moved ${summary.moved}` : "",
 				].filter(Boolean);
 				setStatus(
 					parts.length > 0
@@ -553,56 +706,79 @@ export class AgentSettingsModal extends Modal {
 					cfAccessClientSecret: accessSecretInput.value,
 				});
 
+				const queuedColumnId = queuedSelect.value;
+				const runningColumnId = runningSelect.value;
+				if (queuedColumnId && queuedColumnId === runningColumnId) {
+					throw new Error("Queue and Running columns must be different.");
+				}
+				const repoUrl = repoInput.value.trim();
+				if (source === "github" && !repoUrl) {
+					throw new Error("GitHub repository URL can't be empty.");
+				}
+
+				const agentConfig: BoardAgentConfig = { source };
+				if (backendSelect.value) agentConfig.backend = backendSelect.value;
+				if (source === "github") {
+					agentConfig.github = {
+						repoUrl,
+						branch: branchInput.value.trim(),
+					};
+				}
+				const successColumnId = successSelect.value;
+				const failureColumnId = failureSelect.value;
+				agentConfig.statusMapping = {
+					successColumnId,
+					failureColumnId,
+				};
+				agentConfig.runStateMapping = {
+					queuedColumnId,
+					runningColumnId,
+				};
+				if (worktreeInput.checked) agentConfig.worktree = true;
+				// Persist board settings before touching the workspace. A bad
+				// path or clone failure must not discard backend/worktree settings.
+				this.store.setBoardAgent(
+					this.board.id,
+					Object.keys(agentConfig).length > 0 ? agentConfig : undefined
+				);
+
 				if (source === "local") {
 					const path = localInput.value.trim();
 					if (path) {
-						await this.agent.bindWorkspace(this.board.id, path);
+						const workspace = await this.agent.bindWorkspace(
+							this.board.id,
+							path
+						);
+						localWorkspaceKnown = true;
+						localWorkspaceIsGit = workspace.isGit;
+						localGithubRepoUrl = workspace.githubRepo
+							? githubRepoUrl(workspace.githubRepo)
+							: "";
 					} else {
 						await this.agent.clearWorkspace(this.board.id);
+						localWorkspaceKnown = true;
+						localWorkspaceIsGit = false;
+						localGithubRepoUrl = "";
 					}
+					refreshGitUi();
+					const finalConfig: BoardAgentConfig = { ...agentConfig };
+					if (localGithubRepoUrl) {
+						finalConfig.github = {
+							repoUrl: localGithubRepoUrl,
+							branch: "",
+						};
+					} else {
+						delete finalConfig.github;
+					}
+					if (!localWorkspaceIsGit) delete finalConfig.worktree;
+					this.store.setBoardAgent(this.board.id, finalConfig);
 				} else {
-					const repoUrl = repoInput.value.trim();
-					if (!repoUrl) throw new Error("GitHub repository URL can't be empty.");
 					await this.agent.cloneGithubWorkspace(
 						this.board.id,
 						repoUrl,
 						branchInput.value
 					);
 				}
-
-				const queuedColumnId = queuedSelect.value;
-				const runningColumnId = runningSelect.value;
-				if (queuedColumnId && queuedColumnId === runningColumnId) {
-					throw new Error("Queue and Running columns must be different.");
-				}
-
-				const agentConfig: BoardAgentConfig = {};
-				if (backendSelect.value) agentConfig.backend = backendSelect.value;
-				if (source === "github") {
-					agentConfig.github = {
-						repoUrl: repoInput.value.trim(),
-						branch: branchInput.value.trim(),
-					};
-				}
-				const successColumnId = successSelect.value;
-				const failureColumnId = failureSelect.value;
-				if (successColumnId || failureColumnId) {
-					agentConfig.statusMapping = {
-						...(successColumnId ? { successColumnId } : {}),
-						...(failureColumnId ? { failureColumnId } : {}),
-					};
-				}
-				if (queuedColumnId || runningColumnId) {
-					agentConfig.runStateMapping = {
-						...(queuedColumnId ? { queuedColumnId } : {}),
-						...(runningColumnId ? { runningColumnId } : {}),
-					};
-				}
-				if (worktreeInput.checked) agentConfig.worktree = true;
-				this.store.setBoardAgent(
-					this.board.id,
-					Object.keys(agentConfig).length > 0 ? agentConfig : undefined
-				);
 				new Notice(
 					source === "github"
 						? "GitHub workspace cloned and board agent settings saved."
@@ -614,5 +790,7 @@ export class AgentSettingsModal extends Modal {
 				setBusy(false);
 			});
 		});
+
+		void inspectLocalWorkspace();
 	}
 }

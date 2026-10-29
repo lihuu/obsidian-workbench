@@ -223,6 +223,10 @@ export class AgentController implements Readable<AgentSnapshot> {
 		return workspace;
 	}
 
+	async inspectWorkspace(path: string): Promise<WorkspaceInfo> {
+		return this.client.validateWorkspace(path);
+	}
+
 	async cloneGithubWorkspace(
 		boardId: string,
 		repoUrl: string,

@@ -189,6 +189,25 @@ describe("board agent config", () => {
 		expect(parsed).toEqual(board);
 	});
 
+	it("round-trips a local board with a GitHub sync remote", () => {
+		const board = makeBoard();
+		board.agent = {
+			source: "local",
+			github: {
+				repoUrl: "https://github.com/owner/repo.git",
+				branch: "",
+			},
+		};
+		const parsed = parseBoard(serializeBoard(board), "Workbench/boards/b_abc123.json");
+		expect(parsed).toEqual(board);
+	});
+
+	it("rejects an invalid board source", () => {
+		const raw = JSON.parse(serializeBoard(makeBoard()));
+		raw.agent = { source: "remote" };
+		expect(() => parseBoard(JSON.stringify(raw), "board.json")).toThrow(/agent.source/);
+	});
+
 	it("keeps boards without agent config unchanged", () => {
 		const text = serializeBoard(makeBoard());
 		expect(JSON.parse(text).agent).toBeUndefined();

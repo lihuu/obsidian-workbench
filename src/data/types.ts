@@ -63,6 +63,8 @@ export interface BoardRunStateMapping {
 export interface BoardAgentConfig {
 	/** Execution backend registered by the Runner; defaults to the Runner's backend. */
 	backend?: string;
+	/** Workspace source. GitHub config may also provide issue/PR sync for local repos. */
+	source?: "local" | "github";
 	github?: BoardAgentGitHub;
 	statusMapping?: BoardStatusMapping;
 	/** Execution-state projection columns; the Runner queue remains authoritative. */

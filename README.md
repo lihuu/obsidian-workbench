@@ -217,10 +217,13 @@ device-local and must be entered on the device, or use a GitHub source board.
 3. Choose **Local folder** or **GitHub repository**.
 4. Choose the **Execution backend** (Pi, OMP, OpenCode, or another registered
    backend).
-5. For local, enter a folder. For GitHub, enter an HTTPS/SSH GitHub URL and an
-   optional branch.
-6. Set optional **Queue** / **Running** execution columns.
-7. Set optional **On success** / **On failure** columns.
+5. For local, enter a folder or use **Choose…** (macOS native folder picker).
+   For GitHub, enter an HTTPS/SSH GitHub URL and an optional branch.
+6. Set optional **Queue** / **Running** execution columns. Recommended defaults
+   are Queue → Queue/Inbox/Backlog/Todo, Running → Running/Doing.
+7. Set optional **On success** / **On failure** columns. Recommended defaults
+   are Success → Done and Failure → Failed/Review/Doing (Doing avoids a
+   failure/queue retry loop when Queue is Todo).
 8. Optionally enable **Use a git worktree for each run**.
 9. **Test connection**, then **Save**.
 
@@ -253,8 +256,10 @@ In **Agent → GitHub repository**, click **Sync GitHub**. The sync is one-way:
 GitHub issues / PRs → Workbench tasks
 ```
 
-- Open issues and pull requests are imported into Inbox, then Backlog, then the
-  first column.
+- Only currently open issues and pull requests are imported. Historical closed
+  or merged items are never backfilled.
+- New issues go to **Issue**; open PRs go to **PR**; merged PRs go to
+  **Merged**; closed issues go to **Done**. GitHub columns are kept before Done.
 - Imported tasks show an `Issue #123` / `PR #123` badge plus state, check, and
   review badges.
 - Re-running sync updates existing repo/type/number links instead of creating
@@ -262,9 +267,9 @@ GitHub issues / PRs → Workbench tasks
 - Local title and description edits are preserved. Remote titles only replace a
   title that still matches the previous synced title; the generated body only
   refreshes when its hash still matches the last generated description.
-- Closed issues and merged PRs linked to tasks are fetched even when they are
-  outside the open-list window. Merged PRs and closed issues move to **Done**
-  (or the last column) automatically.
+- Linked tasks that were **OPEN at the previous sync** are refreshed once they
+  close or merge. Existing historical closed/merged tasks are not fetched again.
+  Merged PRs move to **Merged**; closed issues move to **Done**.
 - PRs store `reviewDecision` and normalized check counts: passing, failing,
   pending, or none.
 - GitHub titles/bodies/labels are imported into the task description; the task
@@ -281,7 +286,8 @@ GitHub issues / PRs → Workbench tasks
   `POST /github/sync` with `{ repoUrl, refs? }`,
   `POST /github/comment`, and `POST /github/close`.
 - The GitHub API rate limit applies to `gh`; each list pass requests at most 100
-  open issues and 100 open pull requests. Linked `refs` are capped at 200.
+  open issues and 100 open pull requests. Only open linked `refs` are sent,
+  capped at 200.
 
 ### Worktree mode
 

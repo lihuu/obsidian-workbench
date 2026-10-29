@@ -257,10 +257,150 @@ describe("importGitHubItems", () => {
 				updatedAt: 1,
 				github: { ...link, type: "pull_request", number: 13 },
 			},
+			{
+				id: "t_4",
+				title: "Closed history",
+				description: "",
+				createdAt: 1,
+				updatedAt: 1,
+				github: { ...link, number: 99, state: "CLOSED" },
+			},
 		];
 		expect(collectGitHubRefs(board)).toEqual([
 			{ type: "issue", number: 12 },
 			{ type: "pull_request", number: 13 },
+		]);
+	});
+});
+
+function makeColumnStore() {
+	const tasks: Task[] = [];
+	const columns: Array<{ id: string; name: string; tasks: Task[] }> = [];
+	const assignments: Array<{ taskId: string; columnId: string }> = [];
+	const moveCalls: Array<{ taskId: string; columnId: string }> = [];
+	return {
+		tasks,
+		columns,
+		assignments,
+		moveCalls,
+		addColumn(_boardId: string, name: string) {
+			const column = { id: `c_${name.toLowerCase()}`, name, tasks: [] };
+			columns.push(column);
+			return column;
+		},
+		addTask(_boardId: string, columnId: string, title: string): Task {
+			const task: Task = {
+				id: `t_${tasks.length + 1}`,
+				title,
+				description: "",
+				createdAt: 1,
+				updatedAt: 1,
+			};
+			tasks.push(task);
+			assignments.push({ taskId: task.id, columnId });
+			return task;
+		},
+		updateTask(_boardId: string, taskId: string, patch: Partial<Task>): void {
+			const task = tasks.find((candidate) => candidate.id === taskId);
+			if (task) Object.assign(task, patch, { updatedAt: 2 });
+		},
+		moveTask(_boardId: string, taskId: string, columnId: string): boolean {
+			moveCalls.push({ taskId, columnId });
+			return true;
+		},
+	};
+}
+
+describe("GitHub import columns", () => {
+	it("creates Issue and PR columns for new imports", () => {
+		const board = makeBoard();
+		const store = makeColumnStore();
+		const result: GitHubSyncResult = {
+			repo: "acme/repo",
+			issues: [makeItem()],
+			pullRequests: [makeItem({ number: 13, title: "PR" })],
+		};
+
+		importGitHubItems(store, board, result);
+		expect(store.columns.map((column) => column.name)).toEqual(["Issue", "PR"]);
+		expect(store.assignments).toEqual([
+			{ taskId: "t_1", columnId: "c_issue" },
+			{ taskId: "t_2", columnId: "c_pr" },
+		]);
+	});
+
+	it("moves existing issues out of the default column into Issue", () => {
+		const board = makeBoard();
+		const store = makeColumnStore();
+		board.columns[0].tasks = [
+			{
+				id: "t_existing",
+				title: "Issue",
+				description: "",
+				createdAt: 1,
+				updatedAt: 1,
+				github: {
+					repo: "acme/repo",
+					type: "issue",
+					number: 12,
+					url: "https://github.com/acme/repo/issues/12",
+					state: "OPEN",
+					updatedAt: "2026-10-29T00:00:00Z",
+				},
+			},
+		];
+		const result: GitHubSyncResult = {
+			repo: "acme/repo",
+			issues: [makeItem()],
+			pullRequests: [],
+		};
+
+		const summary = importGitHubItems(store, board, result);
+		expect(summary.moved).toBe(1);
+		expect(store.columns.map((column) => column.name)).toEqual(["Issue"]);
+		expect(store.moveCalls).toEqual([
+			{ taskId: "t_existing", columnId: "c_issue" },
+		]);
+	});
+
+	it("moves merged PRs into the Merged column", () => {
+		const board = makeBoard();
+		const store = makeColumnStore();
+		board.columns[0].tasks = [
+			{
+				id: "t_pr",
+				title: "PR",
+				description: "",
+				createdAt: 1,
+				updatedAt: 1,
+				github: {
+					repo: "acme/repo",
+					type: "pull_request",
+					number: 13,
+					url: "https://github.com/acme/repo/pull/13",
+					state: "OPEN",
+					updatedAt: "2026-10-29T00:00:00Z",
+				},
+			},
+		];
+		const result: GitHubSyncResult = {
+			repo: "acme/repo",
+			issues: [],
+			pullRequests: [
+				makeItem({
+					number: 13,
+					url: "https://github.com/acme/repo/pull/13",
+					state: "MERGED",
+					mergedAt: "2026-10-30T00:00:00Z",
+				}),
+			],
+		};
+
+		const summary = importGitHubItems(store, board, result);
+		expect(summary.moved).toBe(1);
+		expect(store.columns.map((column) => column.name)).toEqual(["Merged"]);
+		expect(store.moveCalls).toEqual([
+			{ taskId: "t_pr", columnId: "c_merged" },
 		]);
 	});
 });
