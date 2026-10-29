@@ -219,8 +219,11 @@ device-local and must be entered on the device, or use a GitHub source board.
    backend).
 5. For local, enter a folder or use **Choose…** (macOS native folder picker).
    For GitHub, enter an HTTPS/SSH GitHub URL and an optional branch.
-6. Set optional **Queue** / **Running** execution columns.
-7. Set optional **On success** / **On failure** columns.
+6. Set optional **Queue** / **Running** execution columns. Recommended defaults
+   are Queue → Queue/Inbox/Backlog/Todo, Running → Running/Doing.
+7. Set optional **On success** / **On failure** columns. Recommended defaults
+   are Success → Done and Failure → Failed/Review/Doing (Doing avoids a
+   failure/queue retry loop when Queue is Todo).
 8. Optionally enable **Use a git worktree for each run**.
 9. **Test connection**, then **Save**.
 

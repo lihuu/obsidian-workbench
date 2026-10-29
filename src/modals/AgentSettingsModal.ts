@@ -346,6 +346,27 @@ export class AgentSettingsModal extends Modal {
 		});
 		updateVisibility();
 
+		const columnId = (...names: string[]) => {
+			for (const name of names) {
+				const column = this.board.columns.find(
+					(candidate) =>
+						candidate.name.trim().toLowerCase() === name.toLowerCase()
+				);
+				if (column) return column.id;
+			}
+			return "";
+		};
+		const defaultQueue = columnId("Queue", "Inbox", "Backlog", "Todo") ||
+			this.board.columns[0]?.id || "";
+		const defaultRunning = columnId("Running", "Doing") ||
+			this.board.columns[1]?.id || this.board.columns[0]?.id || "";
+		const defaultSuccess = columnId("Done") ||
+			this.board.columns[this.board.columns.length - 1]?.id || "";
+		const defaultFailure = columnId("Failed", "Review", "Doing") ||
+			(this.board.columns[1]?.id !== defaultQueue
+				? this.board.columns[1]?.id
+				: "") || "";
+
 		this.contentEl.createDiv({
 			cls: "wb-agent-section-title",
 			text: "Execution columns",
@@ -371,12 +392,12 @@ export class AgentSettingsModal extends Modal {
 		};
 		const queuedSelect = makeColumnSelect(
 			"Queue",
-			this.board.agent?.runStateMapping?.queuedColumnId,
+			this.board.agent?.runStateMapping?.queuedColumnId ?? defaultQueue,
 			"queued"
 		);
 		const runningSelect = makeColumnSelect(
 			"Running",
-			this.board.agent?.runStateMapping?.runningColumnId,
+			this.board.agent?.runStateMapping?.runningColumnId ?? defaultRunning,
 			"running"
 		);
 		runStateField.createDiv({
@@ -397,8 +418,11 @@ export class AgentSettingsModal extends Modal {
 			successSelect.createEl("option", { value: column.id, text: column.name });
 		}
 		const successValue = this.board.agent?.statusMapping?.successColumnId;
-		successSelect.value = this.board.columns.some((column) => column.id === successValue)
-			? (successValue ?? "")
+		const successDefault = successValue ?? defaultSuccess;
+		successSelect.value = this.board.columns.some(
+			(column) => column.id === successDefault
+		)
+			? successDefault
 			: "";
 		successLabel.htmlFor = successSelect.id = `wb-agent-success-${Date.now()}`;
 
@@ -412,13 +436,22 @@ export class AgentSettingsModal extends Modal {
 			failureSelect.createEl("option", { value: column.id, text: column.name });
 		}
 		const failureValue = this.board.agent?.statusMapping?.failureColumnId;
-		failureSelect.value = this.board.columns.some((column) => column.id === failureValue)
-			? (failureValue ?? "")
+		const failureDefault = failureValue ?? defaultFailure;
+		failureSelect.value = this.board.columns.some(
+			(column) => column.id === failureDefault
+		)
+			? failureDefault
 			: "";
 		failureLabel.htmlFor = failureSelect.id = `wb-agent-failure-${Date.now()}`;
 		mappingField.createDiv({
 			cls: "wb-field-hint",
 			text: "Off by default. Cancelled runs are never moved.",
+		});
+		const recommendedName = (id: string) =>
+			this.board.columns.find((column) => column.id === id)?.name ?? "not set";
+		mappingField.createDiv({
+			cls: "wb-field-hint",
+			text: `Recommended: Queue → ${recommendedName(defaultQueue)}, Running → ${recommendedName(defaultRunning)}, Success → ${recommendedName(defaultSuccess)}, Failure → ${recommendedName(defaultFailure)}.`,
 		});
 
 		gitSection = this.contentEl.createDiv({ cls: "wb-agent-git-section" });
@@ -693,18 +726,14 @@ export class AgentSettingsModal extends Modal {
 				}
 				const successColumnId = successSelect.value;
 				const failureColumnId = failureSelect.value;
-				if (successColumnId || failureColumnId) {
-					agentConfig.statusMapping = {
-						...(successColumnId ? { successColumnId } : {}),
-						...(failureColumnId ? { failureColumnId } : {}),
-					};
-				}
-				if (queuedColumnId || runningColumnId) {
-					agentConfig.runStateMapping = {
-						...(queuedColumnId ? { queuedColumnId } : {}),
-						...(runningColumnId ? { runningColumnId } : {}),
-					};
-				}
+				agentConfig.statusMapping = {
+					successColumnId,
+					failureColumnId,
+				};
+				agentConfig.runStateMapping = {
+					queuedColumnId,
+					runningColumnId,
+				};
 				if (worktreeInput.checked) agentConfig.worktree = true;
 				// Persist board settings before touching the workspace. A bad
 				// path or clone failure must not discard backend/worktree settings.
