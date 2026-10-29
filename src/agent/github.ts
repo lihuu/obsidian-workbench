@@ -181,6 +181,9 @@ export function collectGitHubRefs(board: Board): GitHubSyncRef[] {
 	for (const column of board.columns) {
 		for (const task of column.tasks) {
 			if (!task.github) continue;
+			// Only follow tasks that were OPEN at the last sync. Historical
+			// closed/merged items must not be re-fetched into the board.
+			if (task.github.state.toUpperCase() !== "OPEN") continue;
 			const key = `${task.github.repo}|${task.github.type}|${task.github.number}`;
 			if (seen.has(key)) continue;
 			seen.add(key);

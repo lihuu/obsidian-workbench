@@ -257,6 +257,14 @@ describe("importGitHubItems", () => {
 				updatedAt: 1,
 				github: { ...link, type: "pull_request", number: 13 },
 			},
+			{
+				id: "t_4",
+				title: "Closed history",
+				description: "",
+				createdAt: 1,
+				updatedAt: 1,
+				github: { ...link, number: 99, state: "CLOSED" },
+			},
 		];
 		expect(collectGitHubRefs(board)).toEqual([
 			{ type: "issue", number: 12 },
