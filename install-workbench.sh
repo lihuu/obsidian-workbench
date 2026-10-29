@@ -126,6 +126,15 @@ if [ -z "$VERSION" ]; then
 	[ -n "$VERSION" ] || die "Could not resolve the latest release. Pass --version explicitly."
 fi
 
+version_gt() {
+	[ "$1" != "$2" ] || return 1
+	[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
+}
+
+if [ "$FORCE" -eq 0 ] && [ -n "$CURRENT" ] && version_gt "$CURRENT" "$VERSION"; then
+	die "Installed version $CURRENT is newer than release $VERSION. Use --force to downgrade."
+fi
+
 if [ "$FORCE" -eq 0 ] && [ -n "$CURRENT" ] && [ "$CURRENT" = "$VERSION" ]; then
 	installed=1
 	for asset in "${ASSETS[@]}"; do
