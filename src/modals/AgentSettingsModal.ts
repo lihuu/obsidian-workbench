@@ -63,9 +63,35 @@ export class AgentSettingsModal extends Modal {
 		if (mobile) {
 			connectionSection.createDiv({
 				cls: "wb-field-hint wb-agent-mobile-hint",
-				text: "iOS can't start the bundled Runner. Enter an HTTPS remote Runner URL and token; localhost is desktop-only.",
+				text: "iOS can't start the bundled Runner. Use a LAN or HTTPS remote Runner; localhost is desktop-only.",
 			});
 		}
+
+		let connectionMode: "direct" | "cloudflare" =
+			settings.cfAccessClientId || settings.cfAccessClientSecret
+				? "cloudflare"
+				: "direct";
+		const modeField = connectionSection.createDiv({ cls: "wb-field" });
+		const modeLabel = modeField.createEl("label", {
+			cls: "wb-field-label",
+			text: "Connection type",
+		});
+		const modeSelect = modeField.createEl("select", { cls: "wb-input" });
+		modeSelect.createEl("option", {
+			value: "direct",
+			text: "Direct / LAN",
+		});
+		modeSelect.createEl("option", {
+			value: "cloudflare",
+			text: "Cloudflare Access",
+		});
+		modeSelect.value = connectionMode;
+		modeSelect.id = `wb-agent-mode-${Date.now()}`;
+		modeLabel.htmlFor = modeSelect.id;
+		modeField.createDiv({
+			cls: "wb-field-hint",
+			text: "Choose one authentication path. LAN/direct only needs the Runner bearer token.",
+		});
 
 		const urlField = connectionSection.createDiv({ cls: "wb-field" });
 		const urlLabel = urlField.createEl("label", {
@@ -86,31 +112,38 @@ export class AgentSettingsModal extends Modal {
 		const tokenField = connectionSection.createDiv({ cls: "wb-field" });
 		const tokenLabel = tokenField.createEl("label", {
 			cls: "wb-field-label",
-			text: "Runner token (optional)",
+			text: "Runner bearer token",
 		});
 		const tokenInput = tokenField.createEl("input", {
 			cls: "wb-input",
 			type: "password",
 		});
 		tokenInput.value = settings.runnerToken;
-		tokenInput.placeholder = "Required for remote Runner URLs";
+		tokenInput.placeholder = "Required for LAN / remote Runner URLs";
 		tokenInput.id = `wb-agent-token-${Date.now()}`;
 		tokenLabel.htmlFor = tokenInput.id;
 		urlField.createDiv({
 			cls: "wb-field-hint",
 			text: mobile
-				? "Use a Runner reachable over HTTPS from this iPhone, e.g. through Tailscale Serve or Cloudflare Tunnel. Its workspace paths are on the Runner host."
-				: "Desktop starts the bundled local Runner automatically. Set a remote URL/token for Cloudflare or another Runner.",
+				? "Use a LAN or HTTPS URL reachable from this iPhone. Do not append ?token= to the URL; use the field above."
+				: "Desktop starts the bundled local Runner automatically. Use a remote URL only for LAN, HTTPS, or Cloudflare Access.",
+		});
+		tokenField.createDiv({
+			cls: "wb-field-hint",
+			text: "This is the Runner bearer token, not a Cloudflare service token.",
 		});
 
-		connectionSection.createDiv({
-			cls: "wb-agent-section-title",
-			text: "Cloudflare Access service token (remote Runner)",
+		const cloudflareSection = connectionSection.createDiv({
+			cls: "wb-agent-cf-section",
 		});
-		const accessIdField = connectionSection.createDiv({ cls: "wb-field" });
+		cloudflareSection.createDiv({
+			cls: "wb-agent-section-title",
+			text: "Cloudflare Access service token",
+		});
+		const accessIdField = cloudflareSection.createDiv({ cls: "wb-field" });
 		const accessIdLabel = accessIdField.createEl("label", {
 			cls: "wb-field-label",
-			text: "CF-Access-Client-Id",
+			text: "Service token Client ID",
 		});
 		const accessIdInput = accessIdField.createEl("input", {
 			cls: "wb-input",
@@ -121,10 +154,10 @@ export class AgentSettingsModal extends Modal {
 		accessIdInput.id = `wb-agent-cf-id-${Date.now()}`;
 		accessIdLabel.htmlFor = accessIdInput.id;
 
-		const accessSecretField = connectionSection.createDiv({ cls: "wb-field" });
+		const accessSecretField = cloudflareSection.createDiv({ cls: "wb-field" });
 		const accessSecretLabel = accessSecretField.createEl("label", {
 			cls: "wb-field-label",
-			text: "CF-Access-Client-Secret",
+			text: "Service token Client Secret",
 		});
 		const accessSecretInput = accessSecretField.createEl("input", {
 			cls: "wb-input",
@@ -136,8 +169,16 @@ export class AgentSettingsModal extends Modal {
 		accessSecretLabel.htmlFor = accessSecretInput.id;
 		accessSecretField.createDiv({
 			cls: "wb-field-hint",
-			text: "Cloudflare Zero Trust → Access → Service Token. Use both fields together; remote URLs also require HTTPS and a Runner token.",
+			text: "One Cloudflare Access service token consists of a Client ID and Client Secret. Use both together; the Runner bearer token is still required.",
 		});
+		const updateConnectionMode = () => {
+			const cloudflare = modeSelect.value === "cloudflare";
+			connectionMode = cloudflare ? "cloudflare" : "direct";
+			cloudflareSection.hidden = !cloudflare;
+		};
+		modeSelect.addEventListener("change", updateConnectionMode);
+		updateConnectionMode();
+
 		const connectionActions = connectionSection.createDiv({
 			cls: "wb-agent-inline-actions",
 		});
@@ -624,8 +665,10 @@ export class AgentSettingsModal extends Modal {
 				.checkConnection({
 					runnerUrl: urlInput.value,
 					runnerToken: tokenInput.value,
-					cfAccessClientId: accessIdInput.value,
-					cfAccessClientSecret: accessSecretInput.value,
+					cfAccessClientId:
+						connectionMode === "cloudflare" ? accessIdInput.value : "",
+					cfAccessClientSecret:
+						connectionMode === "cloudflare" ? accessSecretInput.value : "",
 					workspacePath: source === "local" ? localInput.value : undefined,
 				})
 				.then(({ health, workspace }) => {
@@ -718,8 +761,10 @@ export class AgentSettingsModal extends Modal {
 				await this.agent.saveConnection({
 					runnerUrl: urlInput.value,
 					runnerToken: tokenInput.value,
-					cfAccessClientId: accessIdInput.value,
-					cfAccessClientSecret: accessSecretInput.value,
+					cfAccessClientId:
+						connectionMode === "cloudflare" ? accessIdInput.value : "",
+					cfAccessClientSecret:
+						connectionMode === "cloudflare" ? accessSecretInput.value : "",
 				});
 
 				const queuedColumnId = queuedSelect.value;
