@@ -444,6 +444,28 @@
 	line-height: 1.4;
 }
 
+
+/* Themes such as AnuPpuccin remove the native select chrome. Draw a
+   theme-aware chevron so dropdowns are visually distinct from text inputs. */
+select.wb-input {
+	appearance: none;
+	-webkit-appearance: none;
+	background-image:
+		linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+		linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+	background-position:
+		calc(100% - 17px) calc(50% - 2px),
+		calc(100% - 12px) calc(50% - 2px);
+	background-size: 5px 5px, 5px 5px;
+	background-repeat: no-repeat;
+	padding-right: 30px;
+	cursor: pointer;
+}
+
+select.wb-input:hover {
+	border-color: var(--background-modifier-border-hover);
+}
+
 .wb-input:focus {
 	outline: 2px solid var(--interactive-accent);
 	outline-offset: 0;
