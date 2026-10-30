@@ -5,6 +5,7 @@ import {
 	Modal,
 	Notice,
 	Platform,
+	setIcon,
 } from "obsidian";
 import type { Board, Task, TaskPatch } from "../data/types";
 import type { AgentController } from "../agent/controller";
@@ -956,7 +957,19 @@ export class TaskDetailModal extends Modal {
 		const message = this.chatEl.createDiv({
 			cls: `wb-chat-msg wb-chat-msg--${kind}`,
 		});
-		message.createDiv({ cls: "wb-chat-role", text: role });
+		const header = message.createDiv({ cls: "wb-chat-header" });
+		const iconEl = header.createSpan({ cls: "wb-chat-header-icon" });
+		const iconName =
+			kind === "user"
+				? "user"
+				: kind === "assistant"
+				? "bot"
+				: kind === "error"
+				? "alert-circle"
+				: "info";
+		setIcon(iconEl, iconName);
+		header.createSpan({ cls: "wb-chat-header-name", text: role });
+
 		const body = message.createDiv({ cls: "wb-chat-bubble" });
 		if (markdown && this.chatComponent) {
 			body.addClass("markdown-rendered");

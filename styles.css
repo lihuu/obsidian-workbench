@@ -565,6 +565,9 @@ select.wb-input:hover {
 	gap: var(--size-4-4);
 	max-height: calc(100vh - 160px);
 	overflow-y: auto;
+	padding-right: var(--size-4-2);
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
 }
 
 .wb-agent-modal {
@@ -628,6 +631,8 @@ select.wb-input:hover {
 	max-height: 42vh;
 	padding: var(--size-4-2) var(--size-4-3);
 	overflow-y: auto;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
 	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
@@ -1593,8 +1598,10 @@ select.wb-input:hover {
 	gap: var(--size-4-2);
 	max-height: 360px;
 	min-height: 80px;
-	padding: var(--size-4-2) 0;
+	padding: var(--size-4-2) var(--size-4-3);
 	overflow-y: auto;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
 }
 
 .wb-chat-empty {
@@ -1607,68 +1614,180 @@ select.wb-input:hover {
 .wb-chat-msg {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
-	max-width: 92%;
+	gap: 4px;
+	width: 100%;
 }
 
+.wb-chat-header {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	user-select: none;
+}
+
+.wb-chat-header-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-faint);
+}
+
+.wb-chat-header-icon svg {
+	width: 13px;
+	height: 13px;
+}
+
+.wb-chat-header-name {
+	line-height: 1;
+}
+
+/* User message */
 .wb-chat-msg--user {
 	align-self: flex-end;
 	align-items: flex-end;
+	max-width: 86%;
 }
 
-.wb-chat-msg--assistant,
-.wb-chat-msg--error,
-.wb-chat-msg--log {
-	align-self: flex-start;
-	align-items: flex-start;
+.wb-chat-msg--user .wb-chat-header {
+	flex-direction: row-reverse;
 }
 
-.wb-chat-role {
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-}
-
-.wb-chat-bubble {
-	box-sizing: border-box;
-	padding: var(--size-4-2) var(--size-4-3);
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	color: var(--text-normal);
-	font-size: var(--font-ui-small);
-	line-height: 1.45;
-	overflow-wrap: anywhere;
-	white-space: pre-wrap;
+.wb-chat-msg--user .wb-chat-header-icon {
+	color: var(--text-muted);
 }
 
 .wb-chat-msg--user .wb-chat-bubble {
-	background: var(--interactive-accent);
-	border-color: var(--interactive-accent);
-	color: var(--text-on-accent);
+	box-sizing: border-box;
+	padding: var(--size-4-2) var(--size-4-3);
+	background: var(--background-secondary-alt, var(--background-secondary));
+	border: 1px solid var(--background-modifier-border-hover, var(--background-modifier-border));
+	border-radius: var(--radius-m);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.wb-chat-msg--error .wb-chat-bubble {
-	border-color: var(--text-error);
-	color: var(--text-error);
+/* Assistant message - clean coding AI unboxed stream */
+.wb-chat-msg--assistant {
+	align-self: flex-start;
+	align-items: flex-start;
+	max-width: 100%;
 }
 
-.wb-chat-msg--log .wb-chat-bubble {
+.wb-chat-msg--assistant .wb-chat-header-icon {
+	color: var(--text-accent);
+}
+
+.wb-chat-msg--assistant .wb-chat-header-name {
+	color: var(--text-accent);
+}
+
+.wb-chat-msg--assistant .wb-chat-bubble {
+	box-sizing: border-box;
+	width: 100%;
+	padding: var(--size-4-1) 0 var(--size-4-2) 0;
 	background: transparent;
-	border-style: dashed;
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
+	border: none;
+	border-radius: 0;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	line-height: 1.6;
+	overflow-wrap: anywhere;
 }
 
-.wb-chat-bubble.markdown-rendered p {
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered > :first-child {
+	margin-top: 0;
+}
+
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered > :last-child {
+	margin-bottom: 0;
+}
+
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered h1,
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered h2,
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered h3,
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered h4 {
+	margin-top: var(--size-4-3);
+	margin-bottom: var(--size-4-2);
+}
+
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered p {
 	margin: 0 0 var(--size-4-2);
 }
 
-.wb-chat-bubble.markdown-rendered p:last-child {
-	margin-bottom: 0;
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered ul,
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered ol {
+	margin: var(--size-4-2) 0;
+	padding-left: var(--size-4-5);
+}
+
+.wb-chat-msg--assistant .wb-chat-bubble.markdown-rendered li {
+	margin-bottom: var(--size-4-1);
+}
+
+/* Error message */
+.wb-chat-msg--error {
+	align-self: flex-start;
+	align-items: flex-start;
+	max-width: 100%;
+}
+
+.wb-chat-msg--error .wb-chat-header-icon,
+.wb-chat-msg--error .wb-chat-header-name {
+	color: var(--text-error);
+}
+
+.wb-chat-msg--error .wb-chat-bubble {
+	box-sizing: border-box;
+	padding: var(--size-4-2) var(--size-4-3);
+	background: rgba(var(--color-red-rgb, 233, 49, 71), 0.08);
+	border: 1px solid var(--text-error);
+	border-radius: var(--radius-s);
+	color: var(--text-error);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.45;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* Log message */
+.wb-chat-msg--log {
+	align-self: flex-start;
+	align-items: flex-start;
+	max-width: 100%;
+}
+
+.wb-chat-msg--log .wb-chat-header {
+	display: none;
+}
+
+.wb-chat-msg--log .wb-chat-bubble {
+	box-sizing: border-box;
+	padding: 2px 0;
+	background: transparent;
+	border: none;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	line-height: 1.4;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 .wb-chat-bubble.markdown-rendered pre {
 	margin: var(--size-4-2) 0;
+	max-width: 100%;
+	overflow-x: auto;
+	scrollbar-gutter: auto;
+	scrollbar-width: thin;
 }
 
 
@@ -1688,6 +1807,8 @@ select.wb-input:hover {
 	margin: var(--size-2-2) 0 0;
 	padding: var(--size-4-2);
 	overflow: auto;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
