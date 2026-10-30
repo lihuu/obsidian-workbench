@@ -1,8 +1,8 @@
 # Workbench Kanban
 
 Local-first kanban boards for Obsidian. Board data lives in
-`Workbench/boards/<id>.json`; device-local runner settings and checkout paths
-live in the plugin's `data.json`.
+`Workbench/boards/<id>.json`; workspace paths sync with the board. The Runner
+connection is stored per device and is not written to `data.json`.
 
 ## Install or update
 
@@ -39,9 +39,10 @@ otherwise reload Obsidian manually.
 
 Each board owns its workspace and execution configuration. Open the board and
 click the **Agent** button in the board header (the bot icon next to the save
-status). The Runner URL/token are global; board source, workspace, column
-mapping, and worktree mode apply to the current board. The **Help** button in
-that modal opens `Workbench/README.md` in the vault.
+status). The Runner URL/token are device-local; desktop defaults to
+`127.0.0.1`, while mobile must use an HTTPS remote Runner. Board source,
+workspace, column mapping, and worktree mode apply to the current board. The
+**Help** button in that modal opens `Workbench/README.md` in the vault.
 
 ## Agent Runner
 
@@ -205,10 +206,14 @@ The service token is an admin credential for the Runner. Rotate it if leaked.
 Agent processes can read provider API keys and execute code in allowed
 workspaces; treat a remote Runner as a high-value endpoint.
 
-On mobile, use a GitHub source board where possible. The plugin now
-auto-clones the board's GitHub workspace on the Runner when a preview or run
-starts and no device-local workspace path exists. Local workspace paths remain
-device-local and must be entered on the device, or use a GitHub source board.
+On mobile, use a GitHub source board where possible. The plugin auto-clones the
+board's GitHub workspace on the Runner when a preview or run starts and no
+workspace path exists. Workspace paths refer to the Runner host; a path synced
+from desktop is valid as long as that checkout exists on the Runner.
+
+The Runner connection is per device: setting the iPhone to a remote URL does not
+change the desktop's `127.0.0.1` endpoint. The connection is stored in local
+storage, not synced `data.json`.
 
 ### Configure a board
 
@@ -237,8 +242,9 @@ The default branch is used when branch is empty. Existing checkouts are fetched
 and checked out to the requested branch rather than blindly reset. System git
 credentials and SSH agents are used; tokens are never written into the board.
 
-The repository URL and branch sync with the board. The checkout path and Runner
-connection stay on this device. Local folder paths also stay on this device.
+The repository URL, branch, and workspace path sync with the board. The Runner
+connection stays on this device and is never written to the synced plugin data.
+On mobile, the workspace path refers to the Runner host, not the iPhone.
 
 ### GitHub issues and pull requests
 

@@ -18,6 +18,27 @@ export function isLoopbackRunnerUrl(value: string): boolean {
 	}
 }
 
+/**
+ * Pick the connection this device should use. `local` is the device-local
+ * override; `synced` is the legacy value that older versions wrote to the
+ * vault. A synced loopback endpoint is meaningless on mobile, so drop it.
+ */
+export function selectRunnerConnection(
+	local: RunnerConnection | null,
+	synced: RunnerConnection,
+	mobile: boolean
+): RunnerConnection {
+	const connection = local ?? synced;
+	if (
+		mobile &&
+		connection.runnerUrl &&
+		isLoopbackRunnerUrl(connection.runnerUrl)
+	) {
+		return { ...connection, runnerUrl: "" };
+	}
+	return connection;
+}
+
 export function validateRunnerConnection(connection: RunnerConnection): void {
 	const url = new URL(connection.runnerUrl);
 	const loopback = isLoopbackHost(url.hostname);

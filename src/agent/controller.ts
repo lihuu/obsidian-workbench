@@ -1,4 +1,4 @@
-import type { App } from "obsidian";
+import { Platform, type App } from "obsidian";
 import { get, writable, type Readable } from "svelte/store";
 import type { Board, Task } from "../data/types";
 import type { DeviceState, PluginDeviceState } from "../data/device-state";
@@ -9,7 +9,10 @@ import {
 	RunnerClient,
 	normalizeRunnerUrl,
 } from "./runner-client";
-import { validateRunnerConnection } from "./runner-connection";
+import {
+	isLoopbackRunnerUrl,
+	validateRunnerConnection,
+} from "./runner-connection";
 import {
 	buildRunHistory,
 	mergeRunIntoHistory,
@@ -38,6 +41,14 @@ const MAX_CACHED_RUN_DETAILS = 20;
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+function assertRunnerUrlForDevice(runnerUrl: string): void {
+	if (Platform.isMobile && runnerUrl && isLoopbackRunnerUrl(runnerUrl)) {
+		throw new Error(
+			"iOS can't reach a localhost Runner. Use an HTTPS remote Runner URL."
+		);
+	}
 }
 
 function createInitialSnapshot(settings: AgentSettings): AgentSnapshot {
@@ -139,6 +150,13 @@ export class AgentController implements Readable<AgentSnapshot> {
 	async refreshHealth(): Promise<void> {
 		if (this.disposed) return;
 		if (this.healthPromise) return this.healthPromise;
+		if (!get(this.state).settings.runnerUrl.trim()) {
+			this.patchHealth({
+				status: "offline",
+				error: "Runner URL is not configured for this device.",
+			});
+			return;
+		}
 		this.patchHealth({ status: "checking", error: "" });
 		this.healthPromise = (async () => {
 			try {
@@ -169,6 +187,7 @@ export class AgentController implements Readable<AgentSnapshot> {
 		workspacePath?: string;
 	}): Promise<{ health: RunnerHealth; workspace: WorkspaceInfo | null }> {
 		const runnerUrl = normalizeRunnerUrl(input.runnerUrl);
+		assertRunnerUrlForDevice(runnerUrl);
 		const client = new RunnerClient(() => ({
 			runnerUrl,
 			runnerToken: input.runnerToken,
@@ -188,16 +207,25 @@ export class AgentController implements Readable<AgentSnapshot> {
 		cfAccessClientId: string;
 		cfAccessClientSecret: string;
 	}): Promise<void> {
-		const runnerUrl = normalizeRunnerUrl(input.runnerUrl);
+		const trimmedUrl = input.runnerUrl.trim();
+		// Mobile can save board settings before a remote Runner exists. An empty
+		// URL is therefore valid there; desktop still needs its local endpoint.
+		if (!trimmedUrl && !Platform.isMobile) {
+			throw new Error("Runner URL can't be empty.");
+		}
+		const runnerUrl = trimmedUrl ? normalizeRunnerUrl(trimmedUrl) : "";
+		assertRunnerUrlForDevice(runnerUrl);
 		const runnerToken = input.runnerToken.trim();
 		const cfAccessClientId = input.cfAccessClientId.trim();
 		const cfAccessClientSecret = input.cfAccessClientSecret.trim();
-		validateRunnerConnection({
-			runnerUrl,
-			runnerToken,
-			cfAccessClientId,
-			cfAccessClientSecret,
-		});
+		if (runnerUrl) {
+			validateRunnerConnection({
+				runnerUrl,
+				runnerToken,
+				cfAccessClientId,
+				cfAccessClientSecret,
+			});
+		}
 		const current = get(this.state).settings;
 		this.patch({
 			settings: {
@@ -208,7 +236,7 @@ export class AgentController implements Readable<AgentSnapshot> {
 				cfAccessClientSecret,
 			},
 		});
-		await this.deviceState.save({
+		await this.deviceState.saveConnection({
 			runnerUrl,
 			runnerToken,
 			cfAccessClientId,

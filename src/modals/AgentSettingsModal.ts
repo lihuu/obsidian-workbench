@@ -30,6 +30,7 @@ export class AgentSettingsModal extends Modal {
 
 		const snapshot = this.agent.getSnapshot();
 		const settings = snapshot.settings;
+		const mobile = Platform.isMobile;
 		const github = this.board.agent?.github;
 		let source: SourceKind =
 			this.board.agent?.source ?? (github ? "github" : "local");
@@ -44,7 +45,7 @@ export class AgentSettingsModal extends Modal {
 
 		this.contentEl.createDiv({
 			cls: "wb-agent-intro",
-			text: `Run agent tasks for "${this.board.name}". Board source settings sync with the board; checkout paths and runner settings stay on this device.`,
+			text: `Run agent tasks for "${this.board.name}". Board settings sync through the vault; the Runner connection is stored only on this device.`,
 		});
 
 		const connectionSection = this.contentEl.createDiv({
@@ -52,8 +53,14 @@ export class AgentSettingsModal extends Modal {
 		});
 		connectionSection.createDiv({
 			cls: "wb-agent-section-title",
-			text: "Runner connection (global)",
+			text: "Runner connection (this device)",
 		});
+		if (mobile) {
+			connectionSection.createDiv({
+				cls: "wb-field-hint wb-agent-mobile-hint",
+				text: "iOS can't start the bundled Runner. Enter an HTTPS remote Runner URL and token; localhost is desktop-only.",
+			});
+		}
 
 		const urlField = connectionSection.createDiv({ cls: "wb-field" });
 		const urlLabel = urlField.createEl("label", {
@@ -65,7 +72,9 @@ export class AgentSettingsModal extends Modal {
 			type: "text",
 		});
 		urlInput.value = settings.runnerUrl;
-		urlInput.placeholder = "http://127.0.0.1:4319";
+		urlInput.placeholder = mobile
+			? "https://workbench.example.com"
+			: "http://127.0.0.1:4319";
 		urlInput.id = `wb-agent-url-${Date.now()}`;
 		urlLabel.htmlFor = urlInput.id;
 
@@ -84,7 +93,9 @@ export class AgentSettingsModal extends Modal {
 		tokenLabel.htmlFor = tokenInput.id;
 		urlField.createDiv({
 			cls: "wb-field-hint",
-			text: "Desktop starts the bundled local Runner automatically. Set a remote URL/token for Cloudflare or another Runner.",
+			text: mobile
+				? "Use a Runner reachable over HTTPS from this iPhone, e.g. through Tailscale Serve or Cloudflare Tunnel. Its workspace paths are on the Runner host."
+				: "Desktop starts the bundled local Runner automatically. Set a remote URL/token for Cloudflare or another Runner.",
 		});
 
 		connectionSection.createDiv({
