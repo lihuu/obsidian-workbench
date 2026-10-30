@@ -151,3 +151,79 @@ export function selectDisplayedRun(input: RunSelectionInput): RunSelection {
 		viewingHistory: true,
 	};
 }
+
+export interface ParsedToolStep {
+	name: string;
+	command: string;
+	raw: string;
+	status: "running" | "finished" | "failed";
+	duration?: string;
+}
+
+export function parseToolSteps(lines: string[]): ParsedToolStep[] {
+	const steps: ParsedToolStep[] = [];
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+		if (!line) continue;
+
+		const endMatch = /^([a-zA-Z0-9_-]+)\s+(finished|failed)(?:\s*\(([^)]+)\))?$/i.exec(line);
+		if (endMatch) {
+			const toolName = endMatch[1].toLowerCase();
+			const status = endMatch[2].toLowerCase() === "failed" ? "failed" : "finished";
+			const duration = endMatch[3];
+			let matched = false;
+			for (let i = steps.length - 1; i >= 0; i--) {
+				if (steps[i].status === "running" && steps[i].name.toLowerCase() === toolName) {
+					steps[i].status = status;
+					if (duration) steps[i].duration = duration;
+					matched = true;
+					break;
+				}
+			}
+			if (!matched && steps.length > 0 && steps[steps.length - 1].status === "running") {
+				steps[steps.length - 1].status = status;
+				if (duration) steps[steps.length - 1].duration = duration;
+				matched = true;
+			}
+			if (!matched) {
+				steps.push({
+					name: endMatch[1],
+					command: `${endMatch[2]}${duration ? ` (${duration})` : ""}`,
+					raw: rawLine,
+					status,
+					duration,
+				});
+			}
+			continue;
+		}
+
+		let name = "tool";
+		let cmd = line;
+
+		if (line.startsWith("$ ")) {
+			name = "bash";
+			cmd = line.slice(2).trim();
+		} else if (/^([a-zA-Z0-9_-]+):\s*(.*)$/.test(line)) {
+			const m = /^([a-zA-Z0-9_-]+):\s*(.*)$/.exec(line);
+			if (m) {
+				name = m[1];
+				cmd = m[2].trim();
+			}
+		}
+
+		// Strip repetitive worktree cd prefix:
+		// e.g. "cd /.../worktrees/... && git ..." -> "git ..."
+		const cdMatch = /^cd\s+([^\s&]+)\s*&&\s*(.+)$/.exec(cmd);
+		if (cdMatch) {
+			cmd = cdMatch[2].trim();
+		}
+
+		steps.push({
+			name,
+			command: cmd,
+			raw: rawLine,
+			status: "running",
+		});
+	}
+	return steps;
+}

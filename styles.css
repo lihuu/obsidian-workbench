@@ -1791,32 +1791,185 @@ select.wb-input:hover {
 }
 
 
+/* Tool Activity Micro-steps */
 .wb-chat-activity {
-	margin-left: var(--size-4-2);
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-}
-
-.wb-chat-activity summary {
-	cursor: pointer;
-}
-
-.wb-chat-activity pre {
-	box-sizing: border-box;
-	max-height: 180px;
-	margin: var(--size-2-2) 0 0;
-	padding: var(--size-4-2);
-	overflow: auto;
-	scrollbar-gutter: stable;
-	scrollbar-width: thin;
+	flex-shrink: 0;
+	width: 100%;
+	margin: var(--size-4-2) 0;
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	font-family: var(--font-monospace-theme, var(--font-monospace));
+	border-radius: var(--radius-m);
+	overflow: hidden;
+	transition: border-color 0.15s ease;
+}
+
+.wb-chat-activity:hover {
+	border-color: var(--background-modifier-border-hover);
+}
+
+summary.wb-chat-activity-summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--size-4-2) var(--size-4-3);
+	cursor: pointer;
+	user-select: none;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	list-style: none;
+}
+
+summary.wb-chat-activity-summary::-webkit-details-marker {
+	display: none;
+}
+
+.wb-chat-activity[open] summary.wb-chat-activity-summary {
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.wb-chat-activity-summary-left {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.wb-chat-activity-chevron {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-faint);
+	transition: transform 0.15s ease;
+}
+
+.wb-chat-activity-chevron svg {
+	width: 12px;
+	height: 12px;
+}
+
+.wb-chat-activity[open] .wb-chat-activity-chevron {
+	transform: rotate(90deg);
+}
+
+.wb-chat-activity-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-faint);
+}
+
+.wb-chat-activity-icon svg {
+	width: 13px;
+	height: 13px;
+}
+
+.wb-chat-activity-title {
+	font-weight: var(--font-medium);
+	color: var(--text-muted);
+}
+
+.wb-chat-activity-badge {
+	padding: 1px 6px;
+	border-radius: var(--radius-pill, 10px);
+	font-size: 11px;
+	line-height: 1.2;
+}
+
+.wb-chat-activity-badge--failed {
+	background: rgba(var(--color-red-rgb, 233, 49, 71), 0.15);
+	color: var(--text-error);
+}
+
+.wb-chat-activity-summary-right {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+
+.wb-chat-activity-status.is-running {
+	color: var(--text-accent);
+}
+
+.wb-chat-activity-steps {
+	display: flex;
+	flex-direction: column;
+	background: var(--background-primary);
+	max-height: 220px;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+}
+
+.wb-tool-step {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: 5px var(--size-4-3);
+	border-bottom: 1px solid var(--background-modifier-border);
 	font-size: var(--font-ui-smaller);
 	line-height: 1.4;
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
+}
+
+.wb-tool-step:last-child {
+	border-bottom: none;
+}
+
+.wb-tool-step-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	color: var(--text-faint);
+}
+
+.wb-tool-step-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.wb-tool-step--finished .wb-tool-step-icon {
+	color: var(--text-success, #22c55e);
+}
+
+.wb-tool-step--failed .wb-tool-step-icon {
+	color: var(--text-error);
+}
+
+.wb-tool-step--running .wb-tool-step-icon {
+	color: var(--text-accent);
+}
+
+.wb-tool-step-name {
+	font-family: var(--font-monospace-theme, var(--font-monospace));
+	font-size: 11px;
+	padding: 1px 5px;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.wb-tool-step-cmd {
+	flex: 1 1 auto;
+	font-family: var(--font-monospace-theme, var(--font-monospace));
+	color: var(--text-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.wb-tool-step-duration {
+	flex-shrink: 0;
+	font-size: 11px;
+	color: var(--text-faint);
+	font-family: var(--font-monospace-theme, var(--font-monospace));
 }
 
 .wb-chat-tool {

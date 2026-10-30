@@ -15,7 +15,7 @@ import {
 	githubReviewLabel,
 	githubStateLabel,
 } from "../agent/github";
-import { runStatusLabel, selectDisplayedRun } from "../agent/run-history";
+import { parseToolSteps, runStatusLabel, selectDisplayedRun } from "../agent/run-history";
 import type { RunView } from "../agent/types";
 import {
 	canClearQueue as runCanClearQueue,
@@ -895,19 +895,72 @@ export class TaskDetailModal extends Modal {
 					: `${this.task.title}\n\n${description}`
 				: this.task.title;
 		this.appendChatMessage("user", "You", prompt);
+		const isRunning = run?.status === "running" || run?.status === "queued";
 		let toolLines: string[] = [];
 		let lastError = "";
 		const flushTools = () => {
 			if (!this.chatEl || toolLines.length === 0) return;
+			const steps = parseToolSteps(toolLines);
 			const details = this.chatEl.createEl("details", {
 				cls: "wb-chat-activity",
 			});
-			details.createEl("summary", {
-				text: `Tool activity · ${toolLines.length} step${
-					toolLines.length === 1 ? "" : "s"
-				}`,
-			});
-			details.createEl("pre", { text: toolLines.join("\n") });
+			if (isRunning) {
+				details.open = true;
+			}
+
+			const summary = details.createEl("summary", { cls: "wb-chat-activity-summary" });
+			const summaryLeft = summary.createDiv({ cls: "wb-chat-activity-summary-left" });
+			const chevronEl = summaryLeft.createSpan({ cls: "wb-chat-activity-chevron" });
+			setIcon(chevronEl, "chevron-right");
+			const iconEl = summaryLeft.createSpan({ cls: "wb-chat-activity-icon" });
+			setIcon(iconEl, "terminal");
+
+			const count = steps.length;
+			const failedCount = steps.filter((s) => s.status === "failed").length;
+			const isAnyRunning = steps.some((s) => s.status === "running") && isRunning;
+
+			const titleText = isAnyRunning
+				? `Running tools · ${count} step${count === 1 ? "" : "s"}`
+				: `Tool activity · ${count} step${count === 1 ? "" : "s"}`;
+			summaryLeft.createSpan({ cls: "wb-chat-activity-title", text: titleText });
+
+			if (failedCount > 0) {
+				summaryLeft.createSpan({
+					cls: "wb-chat-activity-badge wb-chat-activity-badge--failed",
+					text: `${failedCount} failed`,
+				});
+			}
+
+			const summaryRight = summary.createDiv({ cls: "wb-chat-activity-summary-right" });
+			if (isAnyRunning) {
+				summaryRight.createSpan({ cls: "wb-chat-activity-status is-running", text: "Running…" });
+			}
+
+			const list = details.createDiv({ cls: "wb-chat-activity-steps" });
+			for (const step of steps) {
+				const stepEl = list.createDiv({
+					cls: `wb-tool-step wb-tool-step--${step.status}`,
+				});
+				const stepIconEl = stepEl.createSpan({ cls: "wb-tool-step-icon" });
+				if (step.status === "failed") {
+					setIcon(stepIconEl, "x");
+				} else if (step.status === "running") {
+					setIcon(stepIconEl, "play");
+				} else {
+					setIcon(stepIconEl, "check");
+				}
+
+				stepEl.createSpan({ cls: "wb-tool-step-name", text: step.name });
+				stepEl.createSpan({
+					cls: "wb-tool-step-cmd",
+					text: step.command || step.raw,
+					attr: { title: step.raw },
+				});
+				if (step.duration) {
+					stepEl.createSpan({ cls: "wb-tool-step-duration", text: step.duration });
+				}
+			}
+
 			toolLines = [];
 		};
 		for (const event of events) {

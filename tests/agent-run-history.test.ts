@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	buildRunHistory,
 	mergeRunIntoHistory,
+	parseToolSteps,
 	runHistoryLabel,
 	runSnapshotFromView,
 	runStatusLabel,
@@ -273,5 +274,45 @@ describe("selectDisplayedRun", () => {
 		expect(selection.run?.summary).toBe("Old summary");
 		expect(selection.run?.logs).toEqual([]);
 		expect(selection.loading).toBe(true);
+	});
+});
+
+describe("parseToolSteps", () => {
+	it("parses bash command start and finished pairs", () => {
+		const steps = parseToolSteps([
+			"bash: cd /tmp/worktrees/wt1 && git status --short",
+			"bash finished (42ms)",
+		]);
+		expect(steps).toHaveLength(1);
+		expect(steps[0].name).toBe("bash");
+		expect(steps[0].command).toBe("git status --short");
+		expect(steps[0].status).toBe("finished");
+		expect(steps[0].duration).toBe("42ms");
+	});
+
+	it("handles failed steps and multi-step sequences", () => {
+		const steps = parseToolSteps([
+			"$ npm test",
+			"bash failed (120ms)",
+			"readFile: src/main.ts",
+			"readFile finished (5ms)",
+		]);
+		expect(steps).toHaveLength(2);
+		expect(steps[0].name).toBe("bash");
+		expect(steps[0].command).toBe("npm test");
+		expect(steps[0].status).toBe("failed");
+		expect(steps[0].duration).toBe("120ms");
+
+		expect(steps[1].name).toBe("readFile");
+		expect(steps[1].command).toBe("src/main.ts");
+		expect(steps[1].status).toBe("finished");
+		expect(steps[1].duration).toBe("5ms");
+	});
+
+	it("leaves running step when no end event is present", () => {
+		const steps = parseToolSteps(["$ git push origin main"]);
+		expect(steps).toHaveLength(1);
+		expect(steps[0].status).toBe("running");
+		expect(steps[0].duration).toBeUndefined();
 	});
 });
