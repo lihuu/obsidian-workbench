@@ -324,7 +324,7 @@
 		return `${workspace} · ${runner}${available ? ` · ${available}` : ""}`;
 	}
 
-	function openTask(task: Task) {
+	function openTask(task: Task, isNew = false) {
 		if (!activeBoard) return;
 		const board = activeBoard;
 		new TaskDetailModal(
@@ -355,13 +355,20 @@
 						(column) => column.name.trim().toLowerCase() === "done"
 					) ?? board.columns[board.columns.length - 1];
 				if (done) store.moveTask(board.id, task.id, done.id);
-			}
+			},
+			isNew
+				? {
+						isNew: true,
+						onDiscard: () => store.deleteTask(board.id, task.id),
+					}
+				: undefined
 		).open();
 	}
 
-	function addTask(columnId: string, title: string) {
+	function addTask(columnId: string) {
 		if (!activeBoard) return;
-		store.addTask(activeBoard.id, columnId, title);
+		const task = store.addTask(activeBoard.id, columnId, "");
+		openTask(task, true);
 	}
 
 	function handleConsider(columnId: string, event: CustomEvent<DndEvent<Task>>) {

@@ -32,6 +32,11 @@ import { GitHubCommentModal } from "./GitHubCommentModal";
 import { NoteSuggestModal } from "./NoteSuggestModal";
 import { openUrl } from "../ui/web-viewer";
 
+export interface TaskDetailOptions {
+	isNew?: boolean;
+	onDiscard?: () => void;
+}
+
 export class TaskDetailModal extends Modal {
 	private readonly task: Task;
 	private readonly board: Board;
@@ -40,6 +45,8 @@ export class TaskDetailModal extends Modal {
 	private readonly onDelete: () => Promise<void> | void;
 	private readonly onRunState: (run: RunView) => void;
 	private readonly onMoveToDone: () => void;
+	private readonly isNew: boolean;
+	private readonly onDiscard?: () => void;
 	private deleteArmed = false;
 	private deleteTimer: number | undefined;
 	private allowClose = false;
@@ -97,7 +104,8 @@ export class TaskDetailModal extends Modal {
 		onSave: (patch: TaskPatch) => void,
 		onDelete: () => Promise<void> | void,
 		onRunState: (run: RunView) => void,
-		onMoveToDone: () => void
+		onMoveToDone: () => void,
+		options: TaskDetailOptions = {}
 	) {
 		super(app);
 		this.task = task;
@@ -107,10 +115,12 @@ export class TaskDetailModal extends Modal {
 		this.onDelete = onDelete;
 		this.onRunState = onRunState;
 		this.onMoveToDone = onMoveToDone;
+		this.isNew = options.isNew === true;
+		this.onDiscard = options.onDiscard;
 	}
 
 	onOpen(): void {
-		this.setTitle("Task details");
+		this.setTitle(this.isNew ? "New task" : "Task details");
 		this.modalEl.addClass("wb-modal");
 		this.contentEl.addClass("wb-modal-content");
 		this.contentEl.empty();
@@ -120,6 +130,7 @@ export class TaskDetailModal extends Modal {
 		const titleInput = titleField.createEl("input", { cls: "wb-input wb-title-input" });
 		titleInput.type = "text";
 		titleInput.value = this.task.title;
+		titleInput.placeholder = "Task title";
 		this.titleInput = titleInput;
 		titleInput.id = `wb-task-title-${this.task.id}`;
 		titleLabel.htmlFor = titleInput.id;
@@ -254,7 +265,15 @@ export class TaskDetailModal extends Modal {
 		});
 
 		cancelButton.addEventListener("click", () => this.close());
-		saveButton.addEventListener("click", () => this.close());
+		saveButton.addEventListener("click", () => {
+			if (this.isNew && !(this.titleInput?.value.trim() ?? "")) {
+				this.errorEl?.setText("Title can't be empty.");
+				this.errorEl?.show();
+				this.titleInput?.focus();
+				return;
+			}
+			this.close();
+		});
 
 		this.setPreview(true);
 
@@ -957,6 +976,12 @@ export class TaskDetailModal extends Modal {
 		}
 		const title = this.titleInput?.value.trim() ?? this.task.title;
 		if (!title) {
+			if (this.isNew) {
+				this.onDiscard?.();
+				this.allowClose = true;
+				super.close();
+				return;
+			}
 			this.errorEl?.setText("Title can't be empty.");
 			this.errorEl?.show();
 			this.titleInput?.focus();

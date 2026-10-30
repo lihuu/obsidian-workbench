@@ -422,14 +422,6 @@
 	height: 14px;
 }
 
-.wb-composer {
-	display: flex;
-	flex-direction: column;
-	gap: var(--size-4-2);
-	flex: 0 0 auto;
-	padding: 0 var(--size-4-3) var(--size-4-3);
-}
-
 .wb-input {
 	box-sizing: border-box;
 	width: 100%;
@@ -474,16 +466,6 @@ select.wb-input:hover {
 
 .wb-input::placeholder {
 	color: var(--text-faint);
-}
-
-.wb-composer-input {
-	min-height: 36px;
-}
-
-.wb-composer-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: var(--size-4-2);
 }
 
 .wb-sr-only {

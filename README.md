@@ -236,18 +236,18 @@ storage, not synced `data.json`.
 
 1. Open the board.
 2. Click **Agent** in the header.
-3. Choose **Local folder** or **GitHub repository**.
-4. Choose the **Execution backend** (Pi, OMP, OpenCode, or another registered
-   backend).
-5. For local, enter a folder or use **Choose…** (macOS native folder picker).
-   For GitHub, enter an HTTPS/SSH GitHub URL and an optional branch.
+3. Configure **Runner connection**: choose Direct / LAN or Cloudflare Access,
+   enter the URL and Runner bearer token, then **Test connection**.
+4. Configure **Workspace**: choose Local folder or GitHub repository. For local,
+   enter a folder or use **Choose…** (macOS native folder picker). For GitHub,
+   enter an HTTPS/SSH URL and an optional branch.
+5. Configure **Execution**: choose Pi, OMP, OpenCode, or another registered
+   backend, and optionally enable **Use a git worktree for each run**.
 6. Set optional **Queue** / **Running** execution columns. Recommended defaults
    are Queue → Queue/Inbox/Backlog/Todo, Running → Running/Doing.
 7. Set optional **On success** / **On failure** columns. Recommended defaults
-   are Success → Done and Failure → Failed/Review/Doing (Doing avoids a
-   failure/queue retry loop when Queue is Todo).
-8. Optionally enable **Use a git worktree for each run**.
-9. **Test connection**, then **Save**.
+   are Success → Done and Failure → Failed/Review/Doing.
+8. **Save**.
 
 GitHub clones go to:
 
@@ -346,6 +346,12 @@ in-memory: a Runner restart marks them failed rather than resuming them.
 The task detail shows the branch and worktree path. **Remove worktree** deletes
 a clean, finished worktree; the branch is left for review/merge. If the worktree
 has uncommitted changes, removal is refused.
+
+### Create a task
+
+Click **Add task** in a column. Workbench creates a draft task and opens the
+**New task** details modal immediately. Enter a title and description, then
+Save. Closing or cancelling an empty draft discards it.
 
 ### Run a task
 
