@@ -14,13 +14,8 @@ import {
 	githubReviewLabel,
 	githubStateLabel,
 } from "../agent/github";
-import {
-	runHistoryLabel,
-	runStatusLabel,
-	selectDisplayedRun,
-	summaryFirstLine,
-} from "../agent/run-history";
-import type { RunEvent, RunView } from "../agent/types";
+import { runStatusLabel, selectDisplayedRun } from "../agent/run-history";
+import type { RunView } from "../agent/types";
 import {
 	canClearQueue as runCanClearQueue,
 	canContinueRun as runCanContinue,
@@ -65,20 +60,17 @@ export class TaskDetailModal extends Modal {
 	private runMetaEl: HTMLElement | undefined;
 	private runSessionEl: HTMLElement | undefined;
 	private runWorktreeEl: HTMLElement | undefined;
-	private runLogEl: HTMLPreElement | undefined;
-	private runSummaryEl: HTMLPreElement | undefined;
 	private runErrorEl: HTMLElement | undefined;
-	private runHistoryEl: HTMLElement | undefined;
+	private chatEl: HTMLElement | undefined;
+	private chatComponent: Component | undefined;
+	private chatSignature = "";
+	private historySelect: HTMLSelectElement | undefined;
 	private messageComposerEl: HTMLElement | undefined;
 	private messageInputEl: HTMLTextAreaElement | undefined;
-	private sendFollowUpButton: HTMLButtonElement | undefined;
-	private sendSteerButton: HTMLButtonElement | undefined;
-	private continueButton: HTMLButtonElement | undefined;
+	private sendButton: HTMLButtonElement | undefined;
 	private clearQueueButton: HTMLButtonElement | undefined;
 	private messageErrorEl: HTMLElement | undefined;
 	private sendingMessage = false;
-	private runSelectionEl: HTMLElement | undefined;
-	private runSelectionLabelEl: HTMLElement | undefined;
 	private runButton: HTMLButtonElement | undefined;
 	private abortButton: HTMLButtonElement | undefined;
 	private contextButton: HTMLButtonElement | undefined;
@@ -377,83 +369,95 @@ export class TaskDetailModal extends Modal {
 		const section = this.contentEl.createDiv({ cls: "wb-run-section" });
 		const header = section.createDiv({ cls: "wb-run-header" });
 		this.runTitleEl = header.createDiv({ cls: "wb-run-title", text: "Agent" });
-		this.runStatusEl = header.createDiv({ cls: "wb-run-status" });
-
-		const selection = section.createDiv({ cls: "wb-run-selection" });
-		this.runSelectionEl = selection;
-		this.runSelectionLabelEl = selection.createSpan({ cls: "wb-run-selection-label" });
-		const latestButton = selection.createEl("button", {
-			cls: "wb-button wb-button--ghost wb-button--small",
-			text: "Back to latest",
+		const headerRight = header.createDiv({ cls: "wb-run-header-right" });
+		this.historySelect = headerRight.createEl("select", {
+			cls: "wb-input wb-chat-history",
+			attr: { "aria-label": "Run history" },
 		});
-		selection.hidden = true;
-
-		const actions = section.createDiv({ cls: "wb-run-actions" });
-		this.runButton = actions.createEl("button", {
+		this.historySelect.hidden = true;
+		this.historySelect.addEventListener("change", () => {
+			const value = this.historySelect?.value ?? "";
+			if (!value) {
+				this.selectedRunId = null;
+				this.detailError = "";
+				this.updateRunUi();
+				return;
+			}
+			this.selectRun(value);
+		});
+		this.runStatusEl = headerRight.createDiv({ cls: "wb-run-status" });
+		this.runButton = headerRight.createEl("button", {
 			cls: "wb-button wb-button--primary wb-button--small",
 			text: "Run with agent",
 		});
-		this.abortButton = actions.createEl("button", {
+		this.abortButton = headerRight.createEl("button", {
 			cls: "wb-button wb-button--small",
 			text: "Abort",
 		});
-		this.contextButton = actions.createEl("button", {
-			cls: "wb-button wb-button--ghost wb-button--small",
-			text: "Preview context",
+
+		const details = section.createEl("details", { cls: "wb-chat-details" });
+		details.createEl("summary", { text: "Run details" });
+		this.runMetaEl = details.createDiv({ cls: "wb-run-meta" });
+		this.runSessionEl = details.createDiv({ cls: "wb-run-session" });
+		this.runWorktreeEl = details.createDiv({ cls: "wb-run-worktree" });
+
+		this.chatComponent = new Component();
+		this.chatComponent.load();
+		this.chatEl = section.createDiv({ cls: "wb-chat" });
+		this.chatEl.setAttr("role", "log");
+		this.chatEl.setAttr("aria-live", "polite");
+
+		this.messageComposerEl = section.createDiv({ cls: "wb-chat-composer" });
+		const composerRow = this.messageComposerEl.createDiv({ cls: "wb-chat-composer-row" });
+		this.messageInputEl = composerRow.createEl("textarea", {
+			cls: "wb-input wb-chat-input",
+			attr: { placeholder: "Message agent…" },
 		});
-		this.cleanupButton = actions.createEl("button", {
-			cls: "wb-button wb-button--ghost wb-button--small",
-			text: "Remove worktree",
+		this.sendButton = composerRow.createEl("button", {
+			cls: "wb-button wb-button--primary wb-chat-send",
+			text: "Send",
 		});
-		this.cleanupButton.hidden = true;
-		const historyHeader = section.createDiv({ cls: "wb-run-history-header" });
-		historyHeader.createDiv({ cls: "wb-run-history-title", text: "Run history" });
-		this.runHistoryEl = section.createDiv({ cls: "wb-run-history" });
-		this.messageComposerEl = section.createDiv({ cls: "wb-run-message-composer" });
-		this.messageInputEl = this.messageComposerEl.createEl("textarea", {
-			cls: "wb-input wb-run-message-input",
-			attr: { placeholder: "Follow up with agent…" },
+		const composerActions = this.messageComposerEl.createDiv({
+			cls: "wb-chat-composer-actions",
 		});
-		const messageActions = this.messageComposerEl.createDiv({ cls: "wb-run-message-actions" });
-		this.sendFollowUpButton = messageActions.createEl("button", {
-			cls: "wb-button wb-button--primary wb-button--small",
-			text: "Follow up",
-		});
-		this.sendSteerButton = messageActions.createEl("button", {
-			cls: "wb-button wb-button--ghost wb-button--small",
-			text: "Steer",
-		});
-		this.continueButton = messageActions.createEl("button", {
-			cls: "wb-button wb-button--primary wb-button--small",
-			text: "Continue",
-		});
-		this.clearQueueButton = messageActions.createEl("button", {
+		this.clearQueueButton = composerActions.createEl("button", {
 			cls: "wb-button wb-button--ghost wb-button--small",
 			text: "Clear queue",
 		});
 		this.messageErrorEl = this.messageComposerEl.createDiv({ cls: "wb-form-error" });
 		this.messageErrorEl.hidden = true;
-		this.runMetaEl = section.createDiv({ cls: "wb-run-meta" });
-		this.runSessionEl = section.createDiv({ cls: "wb-run-session" });
-		this.runWorktreeEl = section.createDiv({ cls: "wb-run-worktree" });
+
+		const tools = section.createDiv({ cls: "wb-chat-tools" });
+		this.contextButton = tools.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small",
+			text: "Preview context",
+		});
+		this.cleanupButton = tools.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small",
+			text: "Remove worktree",
+		});
+		this.cleanupButton.hidden = true;
 		this.contextEl = section.createEl("pre", { cls: "wb-run-context" });
 		this.contextEl.hide();
-		this.runLogEl = section.createEl("pre", { cls: "wb-run-log" });
-		this.runSummaryEl = section.createEl("pre", { cls: "wb-run-summary" });
 		this.runErrorEl = section.createDiv({ cls: "wb-form-error" });
+		this.runErrorEl.hidden = true;
 
 		this.runButton.addEventListener("click", () => void this.startRun());
 		this.abortButton.addEventListener("click", () => void this.abortRun());
 		this.contextButton.addEventListener("click", () => void this.previewContext());
 		this.cleanupButton.addEventListener("click", () => void this.removeWorktree());
-		this.sendFollowUpButton.addEventListener("click", () => void this.sendMessage("follow_up"));
-		this.sendSteerButton.addEventListener("click", () => void this.sendMessage("steer"));
-		this.continueButton.addEventListener("click", () => void this.sendContinue());
+		this.sendButton.addEventListener("click", () => void this.sendChat());
 		this.clearQueueButton.addEventListener("click", () => void this.clearQueue());
-		latestButton.addEventListener("click", () => {
-			this.selectedRunId = null;
-			this.detailError = "";
-			this.updateRunUi();
+		this.messageInputEl.addEventListener("keydown", (event) => {
+			if (
+				event.key === "Enter" &&
+				!event.shiftKey &&
+				!event.isComposing &&
+				event.keyCode !== 229
+			) {
+				event.preventDefault();
+				void this.sendChat();
+			}
 		});
 
 		this.unsubscribeAgent = this.agent.subscribe(() => this.updateRunUi());
@@ -720,22 +724,6 @@ export class TaskDetailModal extends Modal {
 			this.runStatusEl.addClass(`wb-run-status--${latest.status}`);
 		}
 
-		if (this.runSelectionEl && this.runSelectionLabelEl) {
-			const viewingEarlier =
-				this.selectedRunId !== null && this.selectedRunId !== latest?.id;
-			this.runSelectionEl.hidden = !viewingEarlier;
-			if (viewingEarlier) {
-				const selected = displayed.run;
-				const when = selected
-					? this.runTimeFormatter.format(new Date(selected.createdAt))
-					: "an earlier run";
-				const status = selected ? runStatusLabel(selected.status) : "Loading…";
-				this.runSelectionLabelEl.setText(
-					`Viewing earlier run · ${when} · ${status}`
-				);
-			}
-		}
-
 		this.updateHistoryUi(latest);
 
 		if (this.runMetaEl) {
@@ -780,36 +768,8 @@ export class TaskDetailModal extends Modal {
 			this.cleanupButton.disabled = !removable;
 		}
 
-		if (this.runLogEl) {
-			const lines = run ? formatRunEvents(run.logs) : [];
-			const stick =
-				this.runLogEl.scrollTop + this.runLogEl.clientHeight >=
-				this.runLogEl.scrollHeight - 16;
-			this.runLogEl.setText(
-				lines.length > 0
-					? lines.join("\n")
-					: displayed.loading
-						? "Loading events…"
-						: "No events yet."
-			);
-			this.runLogEl.hidden = !run;
-			if (stick) this.runLogEl.scrollTop = this.runLogEl.scrollHeight;
-		}
+		this.updateChatUi(run, displayed.viewingHistory);
 
-		if (this.runSummaryEl) {
-			this.runSummaryEl.hidden = !run?.summary;
-			this.runSummaryEl.setText(run?.summary ?? "");
-		}
-
-		if (this.runErrorEl) {
-			const message =
-				run?.pollError ||
-				run?.error ||
-				(displayed.viewingHistory ? this.detailError : "") ||
-				"";
-			this.runErrorEl.hidden = !message;
-			this.runErrorEl.setText(message);
-		}
 		if (latest && latest.logs.length === 0 && !active) {
 			void this.agent.refreshRunDetails(this.board.id, this.task.id);
 		}
@@ -822,36 +782,193 @@ export class TaskDetailModal extends Modal {
 		const canSteer = runCanSteer(latest);
 		const canClear = runCanClearQueue(latest);
 		const canContinue = runCanContinue(latest);
-		const running = latest?.status === "running" && latest.aborting !== true;
-		const visible = !viewingHistory && (canFollow || canSteer || canClear || canContinue);
+		const canSend = canFollow || canSteer || canContinue;
+		const visible = !viewingHistory && (canSend || canClear);
 		this.messageComposerEl.hidden = !visible;
 		if (!visible) return;
 		const busy = this.sendingMessage;
+		const backendName = this.backendLabel(latest);
 		if (this.messageInputEl) {
-			const backendName = this.backendLabel(latest);
-			this.messageInputEl.placeholder = running
-				? canFollow
-					? `Follow up with ${backendName}…`
-					: canSteer
-						? `Steer ${backendName}…`
-						: "Clear queued messages above."
-				: `Continue this ${backendName} session…`;
+			this.messageInputEl.hidden = !canSend;
+			this.messageInputEl.placeholder =
+				latest?.status === "running" && latest.aborting !== true
+					? canFollow
+						? `Message ${backendName}…`
+						: canSteer
+							? `Steer ${backendName}…`
+							: ""
+					: `Continue this ${backendName} session…`;
 		}
-		if (this.sendFollowUpButton) {
-			this.sendFollowUpButton.hidden = !canFollow;
-			this.sendFollowUpButton.disabled = busy;
-		}
-		if (this.sendSteerButton) {
-			this.sendSteerButton.hidden = !canSteer;
-			this.sendSteerButton.disabled = busy;
+		if (this.sendButton) {
+			this.sendButton.hidden = !canSend;
+			this.sendButton.disabled = busy;
 		}
 		if (this.clearQueueButton) {
 			this.clearQueueButton.hidden = !canClear;
 			this.clearQueueButton.disabled = busy;
 		}
-		if (this.continueButton) {
-			this.continueButton.hidden = !canContinue;
-			this.continueButton.disabled = busy;
+	}
+
+	private async sendChat(): Promise<void> {
+		if (!this.messageInputEl || this.sendingMessage) return;
+		const message = this.messageInputEl.value.trim();
+		if (!message) return;
+		const latest = this.agent.getRun(this.board.id, this.task.id);
+		if (!latest) return;
+		this.sendingMessage = true;
+		if (this.messageErrorEl) this.messageErrorEl.hidden = true;
+		this.updateMessageUi();
+		try {
+			if (latest.status === "running" && latest.aborting !== true) {
+				const mode = runCanFollowUp(latest)
+					? "follow_up"
+					: runCanSteer(latest)
+						? "steer"
+						: null;
+				if (!mode) throw new Error("This backend is not accepting messages.");
+				await this.agent.sendRunMessage(
+					this.board.id,
+					this.task.id,
+					message,
+					mode
+				);
+			} else if (runCanContinue(latest)) {
+				const run = await this.agent.continueRun(
+					this.board.id,
+					this.task.id,
+					message
+				);
+				this.onRunState(run);
+				this.selectedRunId = null;
+			} else {
+				return;
+			}
+			this.messageInputEl.value = "";
+		} catch (error) {
+			if (this.messageErrorEl) {
+				this.messageErrorEl.setText(
+					error instanceof Error ? error.message : String(error)
+				);
+				this.messageErrorEl.hidden = false;
+			}
+		} finally {
+			this.sendingMessage = false;
+			this.updateRunUi();
+		}
+	}
+
+	private updateChatUi(run: RunView | undefined, viewingHistory: boolean): void {
+		if (!this.chatEl) return;
+		const events = run?.logs ?? [];
+		const lastSeq = events.at(-1)?.seq ?? 0;
+		const signature = [
+			run?.id ?? "",
+			run?.status ?? "",
+			run?.error ?? "",
+			viewingHistory ? "history" : "latest",
+			this.task.title,
+			this.task.description,
+			events.length,
+			lastSeq,
+		].join("\n");
+		if (signature === this.chatSignature) return;
+		this.chatSignature = signature;
+		const stick =
+			this.chatEl.scrollTop + this.chatEl.clientHeight >=
+			this.chatEl.scrollHeight - 24;
+		this.chatEl.empty();
+
+		if (!run) {
+			this.chatEl.createDiv({
+				cls: "wb-chat-empty",
+				text: "No conversation yet. Start a run to talk to the agent.",
+			});
+			return;
+		}
+
+		const description = this.task.description.trim();
+		const prompt =
+			description && description !== this.task.title
+				? description.startsWith(this.task.title)
+					? description
+					: `${this.task.title}\n\n${description}`
+				: this.task.title;
+		this.appendChatMessage("user", "You", prompt);
+		let toolLines: string[] = [];
+		let lastError = "";
+		const flushTools = () => {
+			if (!this.chatEl || toolLines.length === 0) return;
+			const details = this.chatEl.createEl("details", {
+				cls: "wb-chat-activity",
+			});
+			details.createEl("summary", {
+				text: `Tool activity · ${toolLines.length} step${
+					toolLines.length === 1 ? "" : "s"
+				}`,
+			});
+			details.createEl("pre", { text: toolLines.join("\n") });
+			toolLines = [];
+		};
+		for (const event of events) {
+			if (event.kind === "status") continue;
+			if (
+				event.kind === "log" &&
+				/^(Turn started|Agent started|Queued|Abort requested|Succeeded|Failed|Cancelled)\.?$/.test(
+					event.text.trim()
+				)
+			) {
+				continue;
+			}
+			if (event.kind === "tool") {
+				toolLines.push(event.text);
+				continue;
+			}
+			flushTools();
+			if (event.kind === "assistant") {
+				this.appendChatMessage("assistant", this.backendLabel(run), event.text, true);
+			} else if (event.kind === "user") {
+				const label = event.mode === "steer" ? "You · steer" : "You";
+				this.appendChatMessage("user", label, event.text);
+			} else if (event.kind === "error") {
+				lastError = event.text;
+				this.appendChatMessage("error", "Error", event.text);
+			} else if (event.kind === "log") {
+				this.appendChatMessage("log", "Log", event.text);
+			}
+		}
+		flushTools();
+		const error = run.pollError || run.error;
+		if (error && error !== lastError) this.appendChatMessage("error", "Error", error);
+		if (stick) {
+			requestAnimationFrame(() => {
+				if (this.chatEl) this.chatEl.scrollTop = this.chatEl.scrollHeight;
+			});
+		}
+	}
+
+	private appendChatMessage(
+		kind: "user" | "assistant" | "error" | "log",
+		role: string,
+		text: string,
+		markdown = false
+	): void {
+		if (!this.chatEl || !text.trim()) return;
+		const message = this.chatEl.createDiv({
+			cls: `wb-chat-msg wb-chat-msg--${kind}`,
+		});
+		message.createDiv({ cls: "wb-chat-role", text: role });
+		const body = message.createDiv({ cls: "wb-chat-bubble" });
+		if (markdown && this.chatComponent) {
+			body.addClass("markdown-rendered");
+			void MarkdownRenderer.render(
+				this.app,
+				text,
+				body,
+				"",
+				this.chatComponent
+			);
+		} else {
+			body.setText(text);
 		}
 	}
 
@@ -864,58 +981,33 @@ export class TaskDetailModal extends Modal {
 	}
 
 	private updateHistoryUi(latest: RunView | undefined): void {
-		if (!this.runHistoryEl) return;
+		if (!this.historySelect) return;
 		const history = this.agent.getRunHistory(this.board.id, this.task.id);
-		const selectedId = this.selectedRunId ?? latest?.id ?? "";
+		const selectedId = this.selectedRunId ?? "";
 		const signature = [
 			this.historyLoading ? "loading" : "",
 			this.historyError,
 			selectedId,
 			this.detailLoadingRunId ?? "",
 			...history.map(
-				(run) =>
-					`${run.id}:${run.status}:${run.createdAt}:${run.title}:${summaryFirstLine(run.summary)}`
+				(run) => `${run.id}:${run.status}:${run.createdAt}`
 			),
 		].join("\n");
 		if (signature === this.historySignature) return;
 		this.historySignature = signature;
-		this.runHistoryEl.empty();
-
-		if (history.length === 0) {
-			const empty = this.runHistoryEl.createDiv({
-				cls: "wb-run-history-empty",
-				text: this.historyLoading
-					? "Loading runs…"
-					: this.historyError
-						? "Couldn't load run history."
-						: "No runs yet.",
+		this.historySelect.empty();
+		this.historySelect.createEl("option", { value: "", text: "Latest" });
+		for (const run of history.slice(0, 20)) {
+			this.historySelect.createEl("option", {
+				value: run.id,
+				text: `${runStatusLabel(run.status)} · ${this.runTimeFormatter.format(new Date(run.createdAt))}`,
 			});
-			empty.title = this.historyError;
-			return;
 		}
-
-		for (const run of history) {
-			const selected = run.id === selectedId;
-			const item = this.runHistoryEl.createEl("button", {
-				cls: "wb-run-history-item",
-			});
-			item.type = "button";
-			if (selected) item.addClass("is-selected");
-			item.setAttr("aria-pressed", selected ? "true" : "false");
-			const head = item.createDiv({ cls: "wb-run-history-head" });
-			head.createSpan({
-				cls: `wb-run-history-status wb-run-history-status--${run.status}`,
-				text: runStatusLabel(run.status),
-			});
-			head.createSpan({
-				cls: "wb-run-history-time",
-				text: this.runTimeFormatter.format(new Date(run.createdAt)),
-			});
-			item.createDiv({
-				cls: "wb-run-history-summary",
-				text: runHistoryLabel(run),
-			});
-			item.addEventListener("click", () => this.selectRun(run.id));
+		this.historySelect.value = selectedId;
+		this.historySelect.hidden = history.length === 0;
+		this.historySelect.title = this.historyError || "";
+		if (latest && !history.some((run) => run.id === latest.id)) {
+			this.historySelect.hidden = false;
 		}
 	}
 
@@ -1006,24 +1098,10 @@ export class TaskDetailModal extends Modal {
 		}
 		this.previewComponent?.unload();
 		this.previewComponent = undefined;
+		this.chatComponent?.unload();
+		this.chatComponent = undefined;
 		this.unsubscribeAgent?.();
 		this.unsubscribeAgent = undefined;
 	}
 }
 
-function formatRunEvents(events: RunEvent[]): string[] {
-	const formatter = new Intl.DateTimeFormat(undefined, {
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-	});
-	return events.slice(-300).map((event) => {
-		const prefix =
-			event.kind === "assistant"
-				? "pi"
-				: event.kind === "user"
-					? `you:${event.mode ?? "follow_up"}`
-					: event.kind;
-		return `${formatter.format(new Date(event.at))} [${prefix}] ${event.text}`;
-	});
-}

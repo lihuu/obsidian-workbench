@@ -1552,6 +1552,228 @@ select.wb-input:hover {
 	gap: var(--size-4-2);
 }
 
+
+.wb-run-header-right {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--size-4-2);
+	flex-wrap: wrap;
+}
+
+.wb-chat-history {
+	flex: 0 1 170px;
+	width: auto;
+	min-height: 28px;
+	padding-top: 2px;
+	padding-bottom: 2px;
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-chat-details {
+	display: block;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-chat-details summary {
+	cursor: pointer;
+}
+
+.wb-chat-details[open] {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding-bottom: var(--size-2-2);
+}
+
+.wb-chat {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	max-height: 360px;
+	min-height: 80px;
+	padding: var(--size-4-2) 0;
+	overflow-y: auto;
+}
+
+.wb-chat-empty {
+	padding: var(--size-4-4) 0;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+}
+
+.wb-chat-msg {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	max-width: 92%;
+}
+
+.wb-chat-msg--user {
+	align-self: flex-end;
+	align-items: flex-end;
+}
+
+.wb-chat-msg--assistant,
+.wb-chat-msg--error,
+.wb-chat-msg--log {
+	align-self: flex-start;
+	align-items: flex-start;
+}
+
+.wb-chat-role {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-chat-bubble {
+	box-sizing: border-box;
+	padding: var(--size-4-2) var(--size-4-3);
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+.wb-chat-msg--user .wb-chat-bubble {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.wb-chat-msg--error .wb-chat-bubble {
+	border-color: var(--text-error);
+	color: var(--text-error);
+}
+
+.wb-chat-msg--log .wb-chat-bubble {
+	background: transparent;
+	border-style: dashed;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-chat-bubble.markdown-rendered p {
+	margin: 0 0 var(--size-4-2);
+}
+
+.wb-chat-bubble.markdown-rendered p:last-child {
+	margin-bottom: 0;
+}
+
+.wb-chat-bubble.markdown-rendered pre {
+	margin: var(--size-4-2) 0;
+}
+
+
+.wb-chat-activity {
+	margin-left: var(--size-4-2);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-chat-activity summary {
+	cursor: pointer;
+}
+
+.wb-chat-activity pre {
+	box-sizing: border-box;
+	max-height: 180px;
+	margin: var(--size-2-2) 0 0;
+	padding: var(--size-4-2);
+	overflow: auto;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	font-family: var(--font-monospace-theme, var(--font-monospace));
+	font-size: var(--font-ui-smaller);
+	line-height: 1.4;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.wb-chat-tool {
+	padding: 2px var(--size-4-2);
+	border-left: 2px solid var(--background-modifier-border);
+	color: var(--text-faint);
+	font-family: var(--font-monospace-theme, var(--font-monospace));
+	font-size: var(--font-ui-smaller);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+.wb-run-section button[hidden],
+.wb-run-section select[hidden] {
+	display: none;
+}
+
+.wb-chat-composer {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-2);
+}
+
+.wb-chat-composer[hidden] {
+	display: none;
+}
+
+.wb-chat-composer-row {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--size-4-2);
+}
+
+.wb-chat-input {
+	flex: 1 1 auto;
+	min-height: 44px;
+	max-height: 140px;
+	resize: vertical;
+	font-size: var(--font-ui-small);
+	line-height: 1.45;
+}
+
+.wb-chat-send {
+	flex: 0 0 auto;
+}
+
+.wb-chat-composer-actions,
+.wb-chat-tools {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	flex-wrap: wrap;
+}
+
+.wb-chat-tools {
+	padding-top: 2px;
+}
+
+@media (max-width: 600px) {
+	.wb-run-header {
+		align-items: flex-start;
+	}
+	.wb-run-header-right {
+		justify-content: flex-start;
+	}
+	.wb-chat-history {
+		flex-basis: 130px;
+	}
+	.wb-chat-composer-row {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.wb-chat-send {
+		align-self: flex-end;
+	}
+}
+
 .wb-run-meta {
 	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
