@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { App } from "obsidian";
-	import { tick } from "svelte";
 	import { dndzone, dragHandle, type DndEvent } from "svelte-dnd-action";
 	import type { Column, Task } from "../data/types";
 	import type { RunView } from "../agent/types";
@@ -29,16 +28,13 @@
 		role?: "queue" | "running";
 		canDelete: boolean;
 		onOpenTask: (task: Task) => void;
-		onAddTask: (columnId: string, title: string) => void;
+		onAddTask: (columnId: string) => void;
 		onRenameColumn: (column: Column) => void;
 		onDeleteColumn: (column: Column) => void;
 		onConsider: (event: CustomEvent<DndEvent<Task>>) => void;
 		onFinalize: (event: CustomEvent<DndEvent<Task>>) => void;
 	} = $props();
 
-	let composerOpen = $state(false);
-	let title = $state("");
-	let inputEl: HTMLInputElement | undefined = $state();
 	let menuOpen = $state(false);
 	let menuWrapEl: HTMLDivElement | undefined = $state();
 
@@ -63,36 +59,6 @@
 		};
 	});
 
-	async function openComposer() {
-		composerOpen = true;
-		await tick();
-		inputEl?.focus();
-	}
-
-	function closeComposer() {
-		composerOpen = false;
-		title = "";
-	}
-
-	function submit() {
-		const value = title.trim();
-		if (!value) return;
-		onAddTask(column.id, value);
-		title = "";
-		queueMicrotask(() => inputEl?.focus());
-	}
-
-	function handleComposerKeydown(event: KeyboardEvent) {
-		if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229) {
-			event.preventDefault();
-			submit();
-			return;
-		}
-		if (event.key === "Escape") {
-			event.preventDefault();
-			closeComposer();
-		}
-	}
 </script>
 
 <section class="wb-column">
@@ -186,33 +152,8 @@
 		{/each}
 	</div>
 
-	{#if composerOpen}
-		<div class="wb-composer">
-			<label class="wb-sr-only" for={`wb-new-task-${column.id}`}>New task in {column.name}</label>
-			<input
-				bind:this={inputEl}
-				bind:value={title}
-				id={`wb-new-task-${column.id}`}
-				class="wb-input wb-composer-input"
-				type="text"
-				placeholder="Task title"
-				onkeydown={handleComposerKeydown}
-			/>
-			<div class="wb-composer-actions">
-				<button class="wb-button wb-button--ghost" onclick={closeComposer}>Cancel</button>
-				<button
-					class="wb-button wb-button--primary"
-					onclick={submit}
-					disabled={!title.trim()}
-				>
-					Add
-				</button>
-			</div>
-		</div>
-	{:else}
-		<button class="wb-add-task" onclick={openComposer}>
-			<span class="wb-add-icon" use:icon={"plus"}></span>
-			<span>Add task</span>
-		</button>
-	{/if}
+	<button class="wb-add-task" onclick={() => onAddTask(column.id)}>
+		<span class="wb-add-icon" use:icon={"plus"}></span>
+		<span>Add task</span>
+	</button>
 </section>

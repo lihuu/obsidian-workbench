@@ -29,7 +29,7 @@
 		runs: Record<string, RunView>;
 		dragging: boolean;
 		onOpenTask: (task: Task) => void;
-		onAddTask: (columnId: string, title: string) => void;
+		onAddTask: (columnId: string) => void;
 		onAddColumn: () => void;
 		onRenameColumn: (column: Column) => void;
 		onDeleteColumn: (column: Column) => void;
