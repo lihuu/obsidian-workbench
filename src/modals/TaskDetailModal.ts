@@ -21,7 +21,6 @@ import {
 	formatRunDuration,
 	parseToolSteps,
 	runStatusLabel,
-	selectDisplayedRun,
 	summaryFirstLine,
 } from "../agent/run-history";
 import type { RunView } from "../agent/types";
@@ -76,7 +75,6 @@ export class TaskDetailModal extends Modal {
 	private chatEl: HTMLElement | undefined;
 	private chatComponent: Component | undefined;
 	private chatSignature = "";
-	private historySelect: HTMLSelectElement | undefined;
 	private messageComposerEl: HTMLElement | undefined;
 	private messageInputEl: HTMLTextAreaElement | undefined;
 	private sendButton: HTMLButtonElement | undefined;
@@ -89,12 +87,7 @@ export class TaskDetailModal extends Modal {
 	private cleanupButton: HTMLButtonElement | undefined;
 	private contextEl: HTMLPreElement | undefined;
 	private starting = false;
-	private selectedRunId: string | null = null;
-	private detailLoadingRunId: string | null = null;
 	private detailError = "";
-	private historyLoading = false;
-	private historyError = "";
-	private historySignature = "";
 	private readonly runTimeFormatter = new Intl.DateTimeFormat(undefined, {
 		dateStyle: "medium",
 		timeStyle: "short",
@@ -404,21 +397,6 @@ export class TaskDetailModal extends Modal {
 		const header = section.createDiv({ cls: "wb-run-header" });
 		this.runTitleEl = header.createDiv({ cls: "wb-run-title", text: "Agent" });
 		const headerRight = header.createDiv({ cls: "wb-run-header-right" });
-		this.historySelect = headerRight.createEl("select", {
-			cls: "wb-input wb-chat-history",
-			attr: { "aria-label": "Run history" },
-		});
-		this.historySelect.hidden = true;
-		this.historySelect.addEventListener("change", () => {
-			const value = this.historySelect?.value ?? "";
-			if (!value) {
-				this.selectedRunId = null;
-				this.detailError = "";
-				this.updateRunUi();
-				return;
-			}
-			this.selectRun(value);
-		});
 		this.runStatusEl = headerRight.createDiv({ cls: "wb-run-status" });
 		this.runButton = headerRight.createEl("button", {
 			cls: "wb-button wb-button--primary wb-button--small",
@@ -533,7 +511,6 @@ export class TaskDetailModal extends Modal {
 				{ ...this.task, title, description }
 			);
 			this.onRunState(run);
-			this.selectedRunId = null;
 			this.detailError = "";
 		} catch (error) {
 			this.runErrorEl?.setText(error instanceof Error ? error.message : String(error));
@@ -606,7 +583,6 @@ export class TaskDetailModal extends Modal {
 				message
 			);
 			this.onRunState(run);
-			this.selectedRunId = null;
 			this.messageInputEl.value = "";
 			this.messageInputEl.style.height = "";
 		} catch (error) {
@@ -661,44 +637,11 @@ export class TaskDetailModal extends Modal {
 	}
 
 	private async loadTaskHistory(): Promise<void> {
-		this.historyLoading = true;
-		this.historyError = "";
-		this.updateRunUi();
 		try {
 			await this.agent.loadTaskHistory(this.board.id, this.task.id);
-		} catch (error) {
-			this.historyError = error instanceof Error ? error.message : String(error);
+		} catch {
+			// History remains usable without full history fetch
 		} finally {
-			this.historyLoading = false;
-			this.updateRunUi();
-		}
-	}
-
-	private selectRun(runId: string): void {
-		const latest = this.agent.getRun(this.board.id, this.task.id);
-		this.detailError = "";
-		if (latest?.id === runId) {
-			this.selectedRunId = null;
-			this.updateRunUi();
-			return;
-		}
-		this.selectedRunId = runId;
-		this.updateRunUi();
-		void this.loadSelectedRun(runId);
-	}
-
-	private async loadSelectedRun(runId: string): Promise<void> {
-		if (this.agent.getRunDetail(runId)) return;
-		this.detailLoadingRunId = runId;
-		this.updateRunUi();
-		try {
-			await this.agent.loadRunDetail(runId);
-		} catch (error) {
-			this.detailError = `Couldn't load this run: ${
-				error instanceof Error ? error.message : String(error)
-			}`;
-		} finally {
-			if (this.detailLoadingRunId === runId) this.detailLoadingRunId = null;
 			this.updateRunUi();
 		}
 	}
@@ -763,15 +706,11 @@ export class TaskDetailModal extends Modal {
 		});
 	}
 
-	private displayedRun(): ReturnType<typeof selectDisplayedRun> {
-		const snapshot = this.agent.getSnapshot();
-		return selectDisplayedRun({
-			latest: this.agent.getRun(this.board.id, this.task.id),
-			history: this.agent.getRunHistory(this.board.id, this.task.id),
-			details: snapshot.runDetails,
-			selectedRunId: this.selectedRunId,
-			loadingRunId: this.detailLoadingRunId,
-		});
+	private displayedRun(): { run: RunView | undefined; viewingHistory: boolean } {
+		return {
+			run: this.agent.getRun(this.board.id, this.task.id),
+			viewingHistory: false,
+		};
 	}
 
 	private updateRunUi(): void {
@@ -830,8 +769,6 @@ export class TaskDetailModal extends Modal {
 			);
 			this.runStatusEl.addClass(`wb-run-status--${latest.status}`);
 		}
-
-		this.updateHistoryUi(latest);
 
 		if (this.runMetaEl) {
 			this.runMetaEl.setText(
@@ -952,7 +889,6 @@ export class TaskDetailModal extends Modal {
 					message
 				);
 				this.onRunState(run);
-				this.selectedRunId = null;
 			} else {
 				return;
 			}
@@ -1303,39 +1239,6 @@ export class TaskDetailModal extends Modal {
 		const id = this.board.agent?.backend || health.defaultBackend;
 		const backend = health.backends.find((entry) => entry.id === id);
 		return backend?.displayName || (id ? id.toUpperCase() : "Agent");
-	}
-
-	private updateHistoryUi(latest: RunView | undefined): void {
-		if (!this.historySelect) return;
-		const history = this.agent.getRunHistory(this.board.id, this.task.id);
-		const selectedId = this.selectedRunId ?? "";
-		const signature = [
-			this.historyLoading ? "loading" : "",
-			this.historyError,
-			selectedId,
-			this.detailLoadingRunId ?? "",
-			...history.map(
-				(run) => `${run.id}:${run.status}:${run.createdAt}`
-			),
-		].join("\n");
-		if (signature === this.historySignature) return;
-		this.historySignature = signature;
-		this.historySelect.empty();
-		this.historySelect.createEl("option", { value: "", text: "Latest" });
-		for (const run of history.slice(0, 20)) {
-			const isContinuation = !!run.parentRunId;
-			const prefix = isContinuation ? "↳ Turn · " : "";
-			this.historySelect.createEl("option", {
-				value: run.id,
-				text: `${prefix}${runStatusLabel(run.status)} · ${this.runTimeFormatter.format(new Date(run.createdAt))}`,
-			});
-		}
-		this.historySelect.value = selectedId;
-		this.historySelect.hidden = history.length === 0;
-		this.historySelect.title = this.historyError || "";
-		if (latest && !history.some((run) => run.id === latest.id)) {
-			this.historySelect.hidden = false;
-		}
 	}
 
 	private setPreview(visible: boolean): void {
