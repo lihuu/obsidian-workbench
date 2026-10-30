@@ -15,7 +15,13 @@ import {
 	githubReviewLabel,
 	githubStateLabel,
 } from "../agent/github";
-import { parseToolSteps, runStatusLabel, selectDisplayedRun } from "../agent/run-history";
+import {
+	formatRunDuration,
+	parseToolSteps,
+	runStatusLabel,
+	selectDisplayedRun,
+	summaryFirstLine,
+} from "../agent/run-history";
 import type { RunView } from "../agent/types";
 import {
 	canClearQueue as runCanClearQueue,
@@ -49,6 +55,8 @@ export class TaskDetailModal extends Modal {
 	private titleInput: HTMLInputElement | undefined;
 	private descriptionInput: HTMLTextAreaElement | undefined;
 	private errorEl: HTMLElement | undefined;
+	private descFold: HTMLDetailsElement | undefined;
+	private userToggledDesc = false;
 	private previewEl: HTMLElement | undefined;
 	private previewButton: HTMLButtonElement | undefined;
 	private linkButton: HTMLButtonElement | undefined;
@@ -61,6 +69,7 @@ export class TaskDetailModal extends Modal {
 	private runMetaEl: HTMLElement | undefined;
 	private runSessionEl: HTMLElement | undefined;
 	private runWorktreeEl: HTMLElement | undefined;
+	private runArtifactsEl: HTMLElement | undefined;
 	private runErrorEl: HTMLElement | undefined;
 	private chatEl: HTMLElement | undefined;
 	private chatComponent: Component | undefined;
@@ -115,10 +124,11 @@ export class TaskDetailModal extends Modal {
 	onOpen(): void {
 		this.setTitle(this.isNew ? "New task" : "Task details");
 		this.modalEl.addClass("wb-modal");
+		this.modalEl.addClass("wb-task-modal");
 		this.contentEl.addClass("wb-modal-content");
 		this.contentEl.empty();
 
-		const titleField = this.contentEl.createDiv({ cls: "wb-field" });
+		const titleField = this.contentEl.createDiv({ cls: "wb-field wb-field--title" });
 		const titleLabel = titleField.createEl("label", { cls: "wb-field-label", text: "Title" });
 		const titleInput = titleField.createEl("input", { cls: "wb-input wb-title-input" });
 		titleInput.type = "text";
@@ -128,7 +138,27 @@ export class TaskDetailModal extends Modal {
 		titleInput.id = `wb-task-title-${this.task.id}`;
 		titleLabel.htmlFor = titleInput.id;
 
-		const descriptionField = this.contentEl.createDiv({ cls: "wb-field" });
+		const hasRuns =
+			!!this.agent.getRun(this.board.id, this.task.id) ||
+			(this.agent.getRunHistory(this.board.id, this.task.id)?.length ?? 0) > 0;
+		const descFold = this.contentEl.createEl("details", { cls: "wb-task-desc-fold" });
+		this.descFold = descFold;
+		descFold.addEventListener("toggle", () => {
+			this.userToggledDesc = true;
+		});
+		if (!hasRuns) {
+			descFold.open = true;
+		}
+		const descSummary = descFold.createEl("summary", { cls: "wb-task-desc-summary" });
+		const descChevron = descSummary.createSpan({ cls: "wb-task-desc-chevron" });
+		setIcon(descChevron, "chevron-right");
+		descSummary.createSpan({ cls: "wb-task-desc-title", text: "Description" });
+		const descHint = descSummary.createSpan({
+			cls: "wb-task-desc-hint",
+			text: summaryFirstLine(this.task.description),
+		});
+
+		const descriptionField = descFold.createDiv({ cls: "wb-task-desc-body wb-field" });
 		const descriptionHeader = descriptionField.createDiv({ cls: "wb-field-header" });
 		const descriptionLabel = descriptionHeader.createEl("label", {
 			cls: "wb-field-label",
@@ -162,6 +192,7 @@ export class TaskDetailModal extends Modal {
 		this.previewEl = previewEl;
 
 		descriptionInput.addEventListener("input", () => {
+			descHint.setText(summaryFirstLine(descriptionInput.value));
 			if (!this.previewVisible) return;
 			if (this.previewTimer !== undefined) window.clearTimeout(this.previewTimer);
 			this.previewTimer = window.setTimeout(() => this.renderPreview(), 150);
@@ -396,6 +427,9 @@ export class TaskDetailModal extends Modal {
 			text: "Abort",
 		});
 
+		this.runArtifactsEl = section.createDiv({ cls: "wb-run-artifacts" });
+		this.runArtifactsEl.hidden = true;
+
 		const details = section.createEl("details", { cls: "wb-chat-details" });
 		details.createEl("summary", { text: "Run details" });
 		this.runMetaEl = details.createDiv({ cls: "wb-run-meta" });
@@ -449,6 +483,11 @@ export class TaskDetailModal extends Modal {
 		this.cleanupButton.addEventListener("click", () => void this.removeWorktree());
 		this.sendButton.addEventListener("click", () => void this.sendChat());
 		this.clearQueueButton.addEventListener("click", () => void this.clearQueue());
+		this.messageInputEl.addEventListener("input", () => {
+			if (!this.messageInputEl) return;
+			this.messageInputEl.style.height = "auto";
+			this.messageInputEl.style.height = `${Math.min(this.messageInputEl.scrollHeight, 120)}px`;
+		});
 		this.messageInputEl.addEventListener("keydown", (event) => {
 			if (
 				event.key === "Enter" &&
@@ -537,6 +576,7 @@ export class TaskDetailModal extends Modal {
 				mode
 			);
 			this.messageInputEl.value = "";
+			this.messageInputEl.style.height = "";
 		} catch (error) {
 			if (this.messageErrorEl) {
 				this.messageErrorEl.setText(
@@ -566,6 +606,7 @@ export class TaskDetailModal extends Modal {
 			this.onRunState(run);
 			this.selectedRunId = null;
 			this.messageInputEl.value = "";
+			this.messageInputEl.style.height = "";
 		} catch (error) {
 			if (this.messageErrorEl) {
 				this.messageErrorEl.setText(
@@ -736,6 +777,10 @@ export class TaskDetailModal extends Modal {
 		}
 
 		const run = displayed.run;
+		if (this.descFold && !this.userToggledDesc && run) {
+			this.descFold.open = false;
+		}
+		this.renderRunArtifacts(run);
 		if (this.runSessionEl) {
 			const session = run?.sessionFile || run?.logPath || "";
 			this.runSessionEl.hidden = !session;
@@ -845,6 +890,7 @@ export class TaskDetailModal extends Modal {
 				return;
 			}
 			this.messageInputEl.value = "";
+			this.messageInputEl.style.height = "";
 		} catch (error) {
 			if (this.messageErrorEl) {
 				this.messageErrorEl.setText(
@@ -856,6 +902,113 @@ export class TaskDetailModal extends Modal {
 			this.sendingMessage = false;
 			this.updateRunUi();
 		}
+	}
+
+	private renderRunArtifacts(run: RunView | undefined): void {
+		if (!this.runArtifactsEl) return;
+		this.runArtifactsEl.empty();
+		if (!run) {
+			this.runArtifactsEl.hidden = true;
+			return;
+		}
+
+		let hasArtifacts = false;
+
+		// 1. Branch Pill with Copy Button
+		if (run.branch) {
+			hasArtifacts = true;
+			const branchPill = this.runArtifactsEl.createDiv({
+				cls: "wb-artifact-pill wb-artifact-pill--branch",
+				attr: { title: `Branch: ${run.branch}` },
+			});
+			const iconEl = branchPill.createSpan({ cls: "wb-artifact-icon" });
+			setIcon(iconEl, "git-branch");
+			branchPill.createSpan({ cls: "wb-artifact-label", text: run.branch });
+
+			const copyBtn = branchPill.createEl("button", {
+				cls: "wb-artifact-btn wb-artifact-btn--copy",
+				attr: { "aria-label": "Copy branch name", title: "Copy branch name" },
+			});
+			const copyIcon = copyBtn.createSpan({ cls: "wb-artifact-btn-icon" });
+			setIcon(copyIcon, "copy");
+
+			copyBtn.addEventListener("click", async (e) => {
+				e.stopPropagation();
+				try {
+					await navigator.clipboard.writeText(run.branch);
+					copyBtn.addClass("is-copied");
+					copyIcon.empty();
+					setIcon(copyIcon, "check");
+					copyBtn.setAttribute("title", "Copied!");
+					new Notice(`Copied branch: ${run.branch}`);
+					window.setTimeout(() => {
+						copyBtn.removeClass("is-copied");
+						copyIcon.empty();
+						setIcon(copyIcon, "copy");
+						copyBtn.setAttribute("title", "Copy branch name");
+					}, 1500);
+				} catch {
+					new Notice("Failed to copy branch name.");
+				}
+			});
+		}
+
+		// 2. Worktree Pill & Inline Remove Action
+		if (run.worktreeRequested) {
+			hasArtifacts = true;
+			const isRemoved = run.worktreeRemoved;
+			const wtPill = this.runArtifactsEl.createDiv({
+				cls: `wb-artifact-pill wb-artifact-pill--worktree ${isRemoved ? "is-removed" : "is-active"}`,
+				attr: {
+					title: isRemoved
+						? "Worktree removed"
+						: run.worktreePath || "Isolated git worktree active",
+				},
+			});
+			const wtIcon = wtPill.createSpan({ cls: "wb-artifact-icon" });
+			setIcon(wtIcon, "folder");
+			wtPill.createSpan({
+				cls: "wb-artifact-label",
+				text: isRemoved ? "Worktree removed" : "Worktree active",
+			});
+
+			const removable =
+				!isRemoved &&
+				!run.parentRunId &&
+				run.status !== "queued" &&
+				run.status !== "running" &&
+				!run.aborting;
+
+			if (removable) {
+				const removeBtn = wtPill.createEl("button", {
+					cls: "wb-artifact-btn wb-artifact-btn--remove",
+					attr: { "aria-label": "Remove worktree", title: "Remove worktree directory" },
+				});
+				const removeIcon = removeBtn.createSpan({ cls: "wb-artifact-btn-icon" });
+				setIcon(removeIcon, "trash-2");
+				removeBtn.addEventListener("click", (e) => {
+					e.stopPropagation();
+					void this.removeWorktree();
+				});
+			}
+		}
+
+		// 3. Duration Pill
+		const duration = formatRunDuration(run.startedAt, run.endedAt);
+		if (duration) {
+			hasArtifacts = true;
+			const durPill = this.runArtifactsEl.createDiv({
+				cls: "wb-artifact-pill wb-artifact-pill--duration",
+				attr: {
+					title: run.endedAt ? `Run duration: ${duration}` : `Running for: ${duration}`,
+				},
+			});
+			const durIcon = durPill.createSpan({ cls: "wb-artifact-icon" });
+			setIcon(durIcon, "clock");
+			durPill.createSpan({ cls: "wb-artifact-label", text: duration });
+		}
+
+		this.runArtifactsEl.hidden = !hasArtifacts;
 	}
 
 	private updateChatUi(run: RunView | undefined, viewingHistory: boolean): void {

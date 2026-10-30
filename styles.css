@@ -581,6 +581,112 @@ select.wb-input:hover {
 	max-height: none;
 }
 
+.wb-modal.wb-task-modal {
+	width: min(720px, 94vw);
+	height: min(840px, 90vh);
+	max-height: calc(100vh - 40px);
+	display: flex;
+	flex-direction: column;
+}
+
+.wb-task-modal .wb-modal-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: none;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	gap: var(--size-4-2);
+	padding-right: 0;
+}
+
+.wb-task-modal .wb-field--title {
+	flex-shrink: 0;
+	margin-bottom: 0;
+}
+
+.wb-task-desc-fold {
+	flex-shrink: 0;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	overflow: hidden;
+	transition: border-color 0.15s ease;
+}
+
+.wb-task-desc-fold:hover {
+	border-color: var(--background-modifier-border-hover);
+}
+
+summary.wb-task-desc-summary {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-3);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	cursor: pointer;
+	user-select: none;
+	list-style: none;
+}
+
+summary.wb-task-desc-summary::-webkit-details-marker {
+	display: none;
+}
+
+.wb-task-desc-chevron {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-faint);
+	transition: transform 0.15s ease;
+}
+
+.wb-task-desc-chevron svg {
+	width: 12px;
+	height: 12px;
+}
+
+.wb-task-desc-fold[open] .wb-task-desc-chevron {
+	transform: rotate(90deg);
+}
+
+.wb-task-desc-title {
+	font-weight: var(--font-medium);
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.wb-task-desc-hint {
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-task-desc-body {
+	padding: var(--size-4-2) var(--size-4-3);
+	border-top: 1px solid var(--background-modifier-border);
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	max-height: 160px;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+}
+
+.wb-task-modal .wb-meta {
+	flex-shrink: 0;
+	font-size: 11px;
+	color: var(--text-faint);
+	margin-top: -2px;
+}
+
 .wb-agent-modal > .wb-agent-footer {
 	flex: 0 0 auto;
 	padding: var(--size-4-3) var(--size-4-6) var(--size-4-4);
@@ -1573,6 +1679,158 @@ select.wb-input:hover {
 	padding-top: 2px;
 	padding-bottom: 2px;
 	font-size: var(--font-ui-smaller);
+}
+
+.wb-task-modal .wb-run-section {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	padding-top: var(--size-4-2);
+	border-top: 1px solid var(--background-modifier-border);
+	gap: var(--size-4-2);
+}
+
+.wb-task-modal .wb-run-header {
+	flex-shrink: 0;
+}
+
+/* Run Artifacts Strip */
+.wb-run-artifacts {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) 0;
+	flex-shrink: 0;
+}
+
+.wb-artifact-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	padding: 2px 8px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-pill, 12px);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.4;
+	color: var(--text-normal);
+}
+
+.wb-artifact-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-muted);
+}
+
+.wb-artifact-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.wb-artifact-pill--branch .wb-artifact-icon {
+	color: var(--text-accent);
+}
+
+.wb-artifact-pill--branch .wb-artifact-label {
+	font-family: var(--font-monospace-theme, var(--font-monospace));
+	font-weight: var(--font-medium);
+}
+
+.wb-artifact-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: transparent;
+	border: none;
+	padding: 2px;
+	margin-left: 2px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	color: var(--text-faint);
+	transition: color 0.15s ease, background-color 0.15s ease;
+	height: 18px;
+	width: 18px;
+}
+
+.wb-artifact-btn:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.wb-artifact-btn.is-copied {
+	color: var(--text-success, #22c55e);
+}
+
+.wb-artifact-btn-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 12px;
+	height: 12px;
+}
+
+.wb-artifact-btn-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.wb-artifact-pill--worktree.is-active {
+	border-color: rgba(var(--color-green-rgb, 34, 197, 94), 0.35);
+}
+
+.wb-artifact-pill--worktree.is-removed {
+	opacity: 0.6;
+}
+
+.wb-artifact-btn--remove {
+	color: var(--text-faint);
+}
+
+.wb-artifact-btn--remove:hover {
+	color: var(--text-error);
+}
+
+.wb-artifact-pill--duration {
+	color: var(--text-muted);
+}
+
+.wb-task-modal .wb-chat-details {
+	flex-shrink: 0;
+}
+
+.wb-task-modal .wb-chat {
+	flex: 1 1 auto;
+	min-height: 120px;
+	max-height: none;
+	overflow-y: auto;
+	padding: var(--size-4-2) var(--size-4-3);
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+}
+
+.wb-task-modal .wb-chat-composer {
+	flex-shrink: 0;
+	padding: var(--size-4-2) 0 var(--size-2-2);
+	border-top: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.wb-task-modal .wb-chat-tools {
+	flex-shrink: 0;
+	padding: 0 0 var(--size-2-2);
+}
+
+.wb-task-modal .wb-modal-footer {
+	flex-shrink: 0;
+	margin-top: 0;
+	padding-top: var(--size-4-2);
+	border-top: 1px solid var(--background-modifier-border);
 }
 
 .wb-chat-details {

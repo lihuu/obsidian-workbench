@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildRunHistory,
+	formatRunDuration,
 	mergeRunIntoHistory,
 	parseToolSteps,
 	runHistoryLabel,
@@ -314,5 +315,32 @@ describe("parseToolSteps", () => {
 		expect(steps).toHaveLength(1);
 		expect(steps[0].status).toBe("running");
 		expect(steps[0].duration).toBeUndefined();
+	});
+});
+
+describe("formatRunDuration", () => {
+	it("returns null when startedAt is missing or invalid", () => {
+		expect(formatRunDuration(null)).toBeNull();
+		expect(formatRunDuration(undefined)).toBeNull();
+		expect(formatRunDuration(0)).toBeNull();
+		expect(formatRunDuration(-10)).toBeNull();
+	});
+
+	it("formats sub-second durations as < 1s", () => {
+		expect(formatRunDuration(1000, 1500)).toBe("< 1s");
+	});
+
+	it("formats seconds", () => {
+		expect(formatRunDuration(1000, 46000)).toBe("45s");
+	});
+
+	it("formats minutes and seconds", () => {
+		expect(formatRunDuration(1000, 125000)).toBe("2m 4s");
+		expect(formatRunDuration(1000, 181000)).toBe("3m");
+	});
+
+	it("formats hours and minutes", () => {
+		expect(formatRunDuration(1000, 3601000)).toBe("1h");
+		expect(formatRunDuration(1000, 4801000)).toBe("1h 20m");
 	});
 });
