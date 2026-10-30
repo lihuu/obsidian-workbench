@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Notice, type App } from "obsidian";
+	import { Notice, Platform, type App } from "obsidian";
 		import { onMount, tick, untrack } from "svelte";
 	import {
 		TRIGGERS,
@@ -12,6 +12,7 @@
 	import { AgentSettingsModal } from "../modals/AgentSettingsModal";
 	import type { AgentController } from "../agent/controller";
 	import type { AgentSnapshot, RunView, TaskProposal } from "../agent/types";
+	import { isLoopbackRunnerUrl } from "../agent/runner-connection";
 	import {
 		targetColumnIdForStatus,
 		tasksEnteringColumn,
@@ -56,6 +57,11 @@
 	);
 	const activeConflict = $derived(
 		activeBoard ? snapshot.conflictBoardIds.includes(activeBoard.id) : false
+	);
+	const mobileRunnerBlocked = $derived(
+		Platform.isMobile &&
+			(!agentSnapshot.settings.runnerUrl.trim() ||
+				isLoopbackRunnerUrl(agentSnapshot.settings.runnerUrl))
 	);
 	const saveLabel = $derived(
 		snapshot.saveState === "saving"
@@ -691,6 +697,20 @@
 					onclick={() => void store.resolveConflictOverwrite(activeBoard.id)}
 				>
 					Keep local
+				</button>
+			</div>
+		</div>
+	{/if}
+
+	{#if mobileRunnerBlocked && activeBoard}
+		<div class="wb-banner wb-banner--warning" role="alert">
+			<span>
+				This iPhone can't reach a localhost Runner. Add an HTTPS remote Runner URL and
+				token in the agent settings.
+			</span>
+			<div class="wb-banner-actions">
+				<button class="wb-button wb-button--small" onclick={openAgentSettings}>
+					Runner settings
 				</button>
 			</div>
 		</div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildRunnerHeaders,
+	selectRunnerConnection,
 	validateRunnerConnection,
 } from "../src/agent/runner-connection";
 
@@ -43,6 +44,31 @@ describe("validateRunnerConnection", () => {
 			validateRunnerConnection({ ...remote, cfAccessClientSecret: "" })
 		).toThrow(/both/);
 		expect(() => validateRunnerConnection(remote)).not.toThrow();
+	});
+});
+
+describe("selectRunnerConnection", () => {
+	const local = {
+		runnerUrl: "http://127.0.0.1:4319",
+		runnerToken: "",
+		cfAccessClientId: "",
+		cfAccessClientSecret: "",
+	};
+
+	it("drops a synced localhost endpoint on mobile", () => {
+		expect(selectRunnerConnection(null, local, true).runnerUrl).toBe("");
+	});
+
+	it("keeps localhost on desktop", () => {
+		expect(selectRunnerConnection(null, local, false).runnerUrl).toBe(local.runnerUrl);
+	});
+
+	it("keeps a remote endpoint on mobile", () => {
+		expect(selectRunnerConnection(null, remote, true)).toEqual(remote);
+	});
+
+	it("prefers the device-local override", () => {
+		expect(selectRunnerConnection(remote, local, true)).toEqual(remote);
 	});
 });
 

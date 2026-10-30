@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import { Platform, requestUrl } from "obsidian";
 import type {
 	GitHubActionResult,
 	GitHubWorkspaceInfo,
@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import {
 	buildRunnerHeaders,
+	isLoopbackRunnerUrl,
 	type RunnerConnection,
 } from "./runner-connection";
 
@@ -48,6 +49,14 @@ export class RunnerClient {
 	): Promise<T> {
 		const connection = this.getConnection();
 		const { runnerUrl } = connection;
+		if (!runnerUrl.trim()) {
+			throw new Error("Runner URL is not configured for this device.");
+		}
+		if (Platform.isMobile && isLoopbackRunnerUrl(runnerUrl)) {
+			throw new Error(
+				"iOS can't reach a localhost Runner. Use an HTTPS remote Runner URL."
+			);
+		}
 		const headers = buildRunnerHeaders(connection);
 		if (body !== undefined) headers["Content-Type"] = "application/json";
 
