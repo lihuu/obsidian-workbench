@@ -22,7 +22,12 @@ export class AgentSettingsModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle("Workbench agent");
+		const version = (
+			this.app as App & {
+				plugins?: { manifests?: Record<string, { version?: string }> };
+			}
+		).plugins?.manifests?.workbench?.version;
+		this.setTitle(version ? `Workbench agent · ${version}` : "Workbench agent");
 		this.modalEl.addClass("wb-modal");
 		this.modalEl.addClass("wb-agent-modal");
 		this.contentEl.addClass("wb-modal-content");
