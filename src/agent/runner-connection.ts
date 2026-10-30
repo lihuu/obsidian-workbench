@@ -5,9 +5,44 @@ export type RunnerConnection = Pick<
 	"runnerUrl" | "runnerToken" | "cfAccessClientId" | "cfAccessClientSecret"
 >;
 
+function normalizeHost(hostname: string): string {
+	return hostname.replace(/^\[|\]$/g, "").replace(/%.*$/, "").toLowerCase();
+}
+
 function isLoopbackHost(hostname: string): boolean {
-	const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+	const host = normalizeHost(hostname);
 	return host === "127.0.0.1" || host === "localhost" || host === "::1";
+}
+
+/**
+ * RFC1918 IPv4, IPv4 link-local, and IPv6 ULA/link-local. These are reachable
+ * only on a local network, so a token-protected HTTP Runner is acceptable for
+ * LAN testing. Public addresses still require HTTPS.
+ */
+export function isPrivateNetworkHost(hostname: string): boolean {
+	const host = normalizeHost(hostname);
+	const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+	if (v4) {
+		const [a, b] = v4.slice(1).map(Number);
+		if ([a, b, Number(v4[3]), Number(v4[4])].some((part) => part > 255)) return false;
+		return (
+			a === 10 ||
+			(a === 172 && b >= 16 && b <= 31) ||
+			(a === 192 && b === 168) ||
+			(a === 169 && b === 254)
+		);
+	}
+	if (host.includes(":")) {
+		return (
+			host.startsWith("fc") ||
+			host.startsWith("fd") ||
+			host.startsWith("fe8") ||
+			host.startsWith("fe9") ||
+			host.startsWith("fea") ||
+			host.startsWith("feb")
+		);
+	}
+	return false;
 }
 
 export function isLoopbackRunnerUrl(value: string): boolean {
@@ -42,7 +77,11 @@ export function selectRunnerConnection(
 export function validateRunnerConnection(connection: RunnerConnection): void {
 	const url = new URL(connection.runnerUrl);
 	const loopback = isLoopbackHost(url.hostname);
-	if (!loopback && url.protocol !== "https:") {
+	if (
+		!loopback &&
+		url.protocol !== "https:" &&
+		!isPrivateNetworkHost(url.hostname)
+	) {
 		throw new Error("Remote Runner URLs must use HTTPS.");
 	}
 	if (!loopback && !connection.runnerToken.trim()) {

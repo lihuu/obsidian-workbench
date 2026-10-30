@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildRunnerHeaders,
+	isPrivateNetworkHost,
 	selectRunnerConnection,
 	validateRunnerConnection,
 } from "../src/agent/runner-connection";
@@ -33,6 +34,24 @@ describe("validateRunnerConnection", () => {
 		).toThrow(/HTTPS/);
 	});
 
+	it("allows token-protected HTTP on private LAN addresses", () => {
+		expect(() =>
+			validateRunnerConnection({
+				...remote,
+				runnerUrl: "http://192.168.2.10:4320",
+			})
+		).not.toThrow();
+	});
+
+	it("still rejects plain HTTP on public addresses", () => {
+		expect(() =>
+			validateRunnerConnection({
+				...remote,
+				runnerUrl: "http://8.8.8.8:4319",
+			})
+		).toThrow(/HTTPS/);
+	});
+
 	it("requires a Runner token for remote runners", () => {
 		expect(() =>
 			validateRunnerConnection({ ...remote, runnerToken: "" })
@@ -44,6 +63,16 @@ describe("validateRunnerConnection", () => {
 			validateRunnerConnection({ ...remote, cfAccessClientSecret: "" })
 		).toThrow(/both/);
 		expect(() => validateRunnerConnection(remote)).not.toThrow();
+	});
+});
+
+describe("isPrivateNetworkHost", () => {
+	it("recognizes RFC1918 and link-local addresses", () => {
+		for (const host of ["10.1.2.3", "172.16.0.1", "172.31.255.254", "192.168.2.10", "169.254.1.2", "fd00::1", "fe80::1"]) {
+			expect(isPrivateNetworkHost(host)).toBe(true);
+		}
+		expect(isPrivateNetworkHost("8.8.8.8")).toBe(false);
+		expect(isPrivateNetworkHost("workbench.example.com")).toBe(false);
 	});
 });
 
