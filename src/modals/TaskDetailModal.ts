@@ -725,13 +725,19 @@ export class TaskDetailModal extends Modal {
 			this.runTitleEl.setText(`${backendName} agent`);
 		}
 		if (this.runButton) {
+			const isRepeatable = (this.task as any).repeatable === true || (this.task as any).type === "recurring";
+			const canRetry = latest?.status === "failed";
+			const shouldShow = !latest || this.starting || isRepeatable || canRetry;
+			this.runButton.hidden = !shouldShow;
 			this.runButton.disabled = !workspace || active || this.starting;
 			this.runButton.setText(
 				this.starting
 					? "Starting…"
-					: latest
+					: isRepeatable && latest
 						? "Run again"
-						: `Run with ${backendName}`
+						: canRetry
+							? "Retry"
+							: `Run with ${backendName}`
 			);
 			this.runButton.title = workspace
 				? ""
