@@ -132,6 +132,21 @@ match it. Browser origins other than `app://obsidian.md` and
 comma-separated allowlist if the Runner should only accept workspaces below
 specific directories. Symlinked roots such as `/tmp` on macOS are normalized.
 
+### LAN Runner (mobile testing)
+
+The runner can listen on the local network for a quick iPhone test:
+
+```bash
+export WORKBENCH_RUNNER_TOKEN="$(openssl rand -hex 24)"
+WORKBENCH_RUNNER_HOST=0.0.0.0 \
+WORKBENCH_RUNNER_PORT=4320 \
+WORKBENCH_RUNNER_TOKEN="$WORKBENCH_RUNNER_TOKEN" \
+npm run runner
+```
+
+Then use `http://<mac-lan-ip>:4320` plus the same token on the iPhone. HTTP
+sends the bearer token in plaintext, so use this only on a trusted LAN.
+
 ### Cloudflare Tunnel and Zero Trust (mobile)
 
 For mobile, keep the Runner bound to localhost and put Cloudflare Tunnel +
@@ -142,8 +157,10 @@ The plugin requires **both** security layers for a remote URL:
 1. Cloudflare Access Service Token
 2. `WORKBENCH_RUNNER_TOKEN` bearer token
 
-The plugin refuses remote `http://` URLs, refuses remote URLs without a Runner
-token, and requires both Access fields together.
+The plugin refuses public `http://` URLs and remote URLs without a Runner
+token. Token-protected `http://` is allowed only for RFC1918/ULA/link-local
+addresses on a trusted LAN; use HTTPS for anything routable from the internet.
+Both Access fields are required together.
 
 Cloudflare dashboard:
 

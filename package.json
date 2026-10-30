@@ -1,6 +1,6 @@
 {
   "name": "obsidian-workbench",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Manage projects and agent tasks on a local-first kanban board.",
   "type": "module",
   "main": "main.js",
