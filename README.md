@@ -366,33 +366,31 @@ Workbench sends:
 - the workspace path
 
 Use **Preview context** to inspect the exact prompt before starting. The task
-is saved before a run starts. The modal shows Runner events, stderr, a final
-assistant summary, the agent session path, and an **Abort** button. Closing the
-modal does not stop the run; the task card keeps a status badge.
+is saved before a run starts.
 
-The modal also lists up to five recent runs for the task, newest first, with
-status, time, and the first line of each summary. Selecting an older run loads
-its summary, session, and logs; live polling of the latest run continues and
-does not replace the selected history entry. Use **Back to latest** to return
-to the live panel.
+The run UI is a chat transcript:
 
-While the latest run is active, the modal exposes a message composer:
+- the task prompt appears as the first user message
+- assistant messages render as Markdown bubbles
+- tool calls are grouped in a collapsed **Tool activity** details block
+- errors appear as error bubbles; **Run details** contains the workspace,
+  session, and worktree paths
+- **Run again** starts a fresh run; **Abort** stops the active one
 
-- **Follow up** queues the message for after the current work
-- **Steer** redirects the agent after the current tool calls, before the next
-  model call
-- user messages appear in the run log as `you:follow_up` / `you:steer`
-- **Clear queue** sends the backend's `clear_queue` command; queued
-  steering/follow-up messages are discarded and the log reports the count
+A single composer submits the next message. While the run is active it is
+delivered as a follow-up (or a steer if follow-up is unsupported). After the
+run settles and a session reference exists, Send starts a **Continue** run with
+the backend's resume command (`pi --session <file>`, `omp --resume <file>`, or
+`opencode run --session <id>`), reusing the same workspace/worktree. The new run
+records `parentRunId` and the same `sessionId`. If the worktree was removed,
+Continue is refused and a new run is required. For OpenCode, the saved session
+reference is its opaque `ses_...` id, not a file path.
 
-Messages are accepted while the backend process is running. After it settles and
-the run has a saved session reference, the composer switches to **Continue**: a
-new run is started with the backend's resume command (`pi --session <file>`,
-`omp --resume <file>`, or `opencode run --session <id>`), reusing the same
-workspace/worktree. The new run records `parentRunId` and the same
-`sessionId`. If the worktree was removed, Continue is refused and a new run is
-required. For OpenCode, the saved session reference is its opaque `ses_...` id,
-not a file path.
+The header's run selector switches between the latest run and earlier runs
+without replacing live polling. **Clear queue** sends the backend's
+`clear_queue` command when the backend supports it; queued steering/follow-up
+messages are discarded. Closing the modal does not stop the run; the task card
+keeps a status badge.
 
 Backends are started with persistent sessions:
 
