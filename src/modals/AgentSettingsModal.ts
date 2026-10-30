@@ -189,13 +189,13 @@ export class AgentSettingsModal extends Modal {
 
 		this.contentEl.createDiv({
 			cls: "wb-agent-section-title",
-			text: "Board workspace (this board)",
+			text: "Workspace (this board)",
 		});
 
 		const backendField = this.contentEl.createDiv({ cls: "wb-field" });
 		const backendLabel = backendField.createEl("label", {
 			cls: "wb-field-label",
-			text: "Execution backend",
+			text: "Backend",
 		});
 		const backendSelect = backendField.createEl("select", { cls: "wb-input" });
 		backendSelect.id = `wb-agent-backend-${Date.now()}`;
@@ -264,7 +264,7 @@ export class AgentSettingsModal extends Modal {
 			configuredBackend || snapshot.health.defaultBackend || knownBackends[0]?.id || "pi";
 		backendField.createDiv({
 			cls: "wb-field-hint",
-			text: "The Runner launches this local agent CLI. Backend binaries stay in Runner configuration, not in the board.",
+			text: "Runs on the Runner selected above. Availability comes from Runner health; unavailable backends cannot run.",
 		});
 
 		const sourceField = this.contentEl.createDiv({ cls: "wb-field" });
@@ -424,7 +424,7 @@ export class AgentSettingsModal extends Modal {
 				? this.board.columns[1]?.id
 				: "") || "";
 
-		this.contentEl.createDiv({
+		const columnsTitle = this.contentEl.createDiv({
 			cls: "wb-agent-section-title",
 			text: "Execution columns",
 		});
@@ -528,7 +528,19 @@ export class AgentSettingsModal extends Modal {
 			text: "Requires a clean git workspace. Creates branch wb/<runId> under the Runner's worktrees directory and enables parallel runs.",
 		});
 
-		this.contentEl.appendChild(connectionSection);
+		// Keep the page in configuration order: Runner -> workspace -> execution
+		// -> board projection rules. The backend/worktree controls are moved
+		// out of the workspace block so the Runner's job is clear.
+		const executionSection = this.contentEl.createDiv({
+			cls: "wb-agent-execution-section",
+		});
+		executionSection.createDiv({
+			cls: "wb-agent-section-title",
+			text: "Execution",
+		});
+		executionSection.appendChild(backendField);
+		executionSection.appendChild(gitSection);
+		this.contentEl.insertBefore(executionSection, columnsTitle);
 
 		refreshGitUi = () => {
 			const gitAvailable =
