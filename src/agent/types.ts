@@ -59,6 +59,7 @@ export interface RunnerRun {
 	baseRepo: string;
 	worktreeRemoved: boolean;
 	parentRunId: string;
+	prompt?: string;
 }
 
 export interface TaskProposal {

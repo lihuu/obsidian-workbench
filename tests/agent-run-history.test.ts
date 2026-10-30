@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+	buildRunChain,
 	buildRunHistory,
+	extractSessionUserMessages,
 	formatRunDuration,
 	mergeRunIntoHistory,
 	parseToolSteps,
@@ -342,5 +344,56 @@ describe("formatRunDuration", () => {
 	it("formats hours and minutes", () => {
 		expect(formatRunDuration(1000, 3601000)).toBe("1h");
 		expect(formatRunDuration(1000, 4801000)).toBe("1h 20m");
+	});
+});
+
+describe("buildRunChain", () => {
+	it("returns empty when selectedRun is undefined", () => {
+		expect(buildRunChain(undefined, [])).toEqual([]);
+	});
+
+	it("returns single run when it has no parentRunId", () => {
+		const r1 = makeRun({ id: "r1", createdAt: 100 });
+		expect(buildRunChain(r1, [r1])).toEqual([r1]);
+	});
+
+	it("traces parentRunId chain chronologically", () => {
+		const r1 = makeRun({ id: "r1", createdAt: 100, parentRunId: "" });
+		const r2 = makeRun({ id: "r2", createdAt: 200, parentRunId: "r1" });
+		const r3 = makeRun({ id: "r3", createdAt: 300, parentRunId: "r2" });
+		const history = [r3, r2, r1];
+
+		expect(buildRunChain(r3, history)).toEqual([r1, r2, r3]);
+		expect(buildRunChain(r2, history)).toEqual([r1, r2]);
+	});
+
+	it("handles cycles or missing parent safely", () => {
+		const r1 = makeRun({ id: "r1", createdAt: 100, parentRunId: "r2" });
+		const r2 = makeRun({ id: "r2", createdAt: 200, parentRunId: "r1" });
+		// Cycle: should not hang in infinite loop
+		const chain = buildRunChain(r2, [r1, r2]);
+		expect(chain.length).toBe(2);
+
+		const orphan = makeRun({ id: "r_orphan", createdAt: 300, parentRunId: "missing_parent" });
+		expect(buildRunChain(orphan, [])).toEqual([orphan]);
+	});
+});
+
+describe("extractSessionUserMessages", () => {
+	it("returns empty on empty content", () => {
+		expect(extractSessionUserMessages("")).toEqual([]);
+	});
+
+	it("extracts string and array user messages, ignoring non-user items", () => {
+		const jsonl = [
+			JSON.stringify({ type: "session" }),
+			JSON.stringify({ type: "message", message: { role: "system", content: "You are an agent." } }),
+			JSON.stringify({ type: "message", message: { role: "user", content: [{ type: "text", text: "First prompt" }] } }),
+			JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Working..." }] } }),
+			JSON.stringify({ type: "message", message: { role: "user", content: "Second follow-up" } }),
+			"malformed json line",
+		].join("\n");
+
+		expect(extractSessionUserMessages(jsonl)).toEqual(["First prompt", "Second follow-up"]);
 	});
 });

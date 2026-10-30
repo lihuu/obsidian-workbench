@@ -729,7 +729,7 @@ async function enqueueRun(body, options = {}) {
 	const id = makeRunId();
 	const proposalToken = randomBytes(24).toString("hex");
 	runTokens.set(id, proposalToken);
-	const session = new RunSession({ id, boardId, taskId, title, cwd: baseCwd });
+	const session = new RunSession({ id, boardId, taskId, title, prompt, cwd: baseCwd });
 	session.setBackend(backend);
 	session.imageCount = images.length;
 	session.worktreeRequested = useWorktree;
@@ -742,6 +742,7 @@ async function enqueueRun(body, options = {}) {
 		session.branch = parent.branch;
 		session.baseRepo = parent.baseRepo;
 		session.worktreeRemoved = parent.worktreeRemoved;
+		session.emit("user", prompt);
 	}
 	const runDir = path.join(RUNS_DIR, id);
 	let log;
@@ -1180,6 +1181,12 @@ async function handleRequest(req, res) {
 		}
 		run.worktreeRemoved = true;
 		persistRun(run);
+		for (const other of runs.values()) {
+			if (other.worktreePath === run.worktreePath) {
+				other.worktreeRemoved = true;
+				persistRun(other);
+			}
+		}
 		json(res, 200, run.page(0));
 		return;
 	}

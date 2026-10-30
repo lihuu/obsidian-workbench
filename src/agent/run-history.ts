@@ -84,6 +84,66 @@ export function buildRunHistory(
 	return [...byId.values()].sort(compareByCreatedAtDescending).slice(0, max);
 }
 
+/**
+ * Trace the parentRunId chain backwards from a selected run to its root ancestor,
+ * returning the ancestral lineage in chronological order (root first, selected last).
+ */
+export function buildRunChain(
+	selectedRun: RunnerRun | undefined,
+	history: readonly RunnerRun[]
+): RunnerRun[] {
+	if (!selectedRun) return [];
+	const byId = new Map<string, RunnerRun>();
+	for (const run of history) {
+		if (run && typeof run.id === "string" && run.id) {
+			byId.set(run.id, run);
+		}
+	}
+	byId.set(selectedRun.id, selectedRun);
+
+	const ancestors: RunnerRun[] = [];
+	let cur: RunnerRun | undefined = selectedRun;
+	const seen = new Set<string>();
+	while (cur && !seen.has(cur.id)) {
+		seen.add(cur.id);
+		ancestors.unshift(cur);
+		cur = cur.parentRunId ? byId.get(cur.parentRunId) : undefined;
+	}
+	return ancestors;
+}
+
+/**
+ * Extract user message texts from session JSONL content (e.g. Pi / OMP session files).
+ */
+export function extractSessionUserMessages(content: string): string[] {
+	if (!content || typeof content !== "string") return [];
+	const messages: string[] = [];
+	for (const line of content.split(/\r?\n/)) {
+		const trimmed = line.trim();
+		if (!trimmed) continue;
+		try {
+			const obj = JSON.parse(trimmed);
+			if (obj && obj.type === "message" && obj.message?.role === "user") {
+				const c = obj.message.content;
+				let text = "";
+				if (typeof c === "string") {
+					text = c;
+				} else if (Array.isArray(c)) {
+					text = c
+						.map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+						.join("");
+				}
+				if (text.trim()) {
+					messages.push(text.trim());
+				}
+			}
+		} catch {
+			// ignore non-JSON or malformed lines
+		}
+	}
+	return messages;
+}
+
 /** Insert or replace one run, keeping the list sorted, deduped, and capped. */
 export function mergeRunIntoHistory(
 	history: readonly RunnerRun[],
@@ -124,6 +184,7 @@ export function runSnapshotFromView(view: RunView): RunnerRun {
 		baseRepo: view.baseRepo,
 		worktreeRemoved: view.worktreeRemoved,
 		parentRunId: view.parentRunId,
+		prompt: view.prompt,
 	};
 }
 

@@ -498,6 +498,12 @@ export class AgentController implements Readable<AgentSnapshot> {
 		}
 		const page = await this.client.continueRun(current.id, message);
 		const view = toView(page);
+		if (!view.prompt) {
+			view.prompt = message;
+		}
+		if (!view.logs.some((e) => e.kind === "user")) {
+			view.logs.unshift({ seq: 0, at: Date.now(), kind: "user", text: message });
+		}
 		const latest = get(this.state).runs[key];
 		if (!latest || latest.id !== current.id) {
 			throw new Error("The run changed before it could be continued.");

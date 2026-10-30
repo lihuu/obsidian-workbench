@@ -36,11 +36,12 @@ function summarizeToolArgs(toolName, args) {
 }
 
 export class RunSession {
-	constructor({ id, boardId, taskId, title, cwd, backendId = "", backendName = "Agent", capabilities = {} }) {
+	constructor({ id, boardId, taskId, title, prompt = "", cwd, backendId = "", backendName = "Agent", capabilities = {} }) {
 		this.id = id;
 		this.boardId = boardId;
 		this.taskId = taskId;
 		this.title = title;
+		this.prompt = prompt;
 		this.cwd = cwd;
 		this.backendId = backendId;
 		this.backendName = backendName;
@@ -257,6 +258,7 @@ export class RunSession {
 			baseRepo: this.baseRepo,
 			worktreeRemoved: this.worktreeRemoved,
 			parentRunId: this.parentRunId,
+			prompt: this.prompt,
 		};
 	}
 
@@ -289,6 +291,7 @@ export class RunSession {
 			baseRepo: snapshot.baseRepo ?? "",
 			worktreeRemoved: snapshot.worktreeRemoved === true,
 			parentRunId: snapshot.parentRunId ?? "",
+			prompt: snapshot.prompt ?? "",
 			events: Array.isArray(events) ? [...events] : [],
 			lastAssistantText: snapshot.summary ?? "",
 		});

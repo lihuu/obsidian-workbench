@@ -16,6 +16,8 @@ import {
 	githubStateLabel,
 } from "../agent/github";
 import {
+	buildRunChain,
+	extractSessionUserMessages,
 	formatRunDuration,
 	parseToolSteps,
 	runStatusLabel,
@@ -633,12 +635,15 @@ export class TaskDetailModal extends Modal {
 		}
 	}
 
-	private async removeWorktree(): Promise<void> {
-		const run = this.displayedRun().run;
-		if (!run) return;
+	private async removeWorktree(targetRunId?: string): Promise<void> {
+		const displayed = this.displayedRun().run;
+		if (!displayed) return;
+		const chain = this.getRunChain(displayed);
+		const rootRun = chain[0] ?? displayed;
+		const runIdToClean = targetRunId || rootRun.id;
 		if (this.cleanupButton) this.cleanupButton.disabled = true;
 		try {
-			await this.agent.cleanupRunWorktree(run.id);
+			await this.agent.cleanupRunWorktree(runIdToClean);
 		} catch (error) {
 			this.detailError = error instanceof Error ? error.message : String(error);
 			this.updateRunUi();
@@ -696,6 +701,66 @@ export class TaskDetailModal extends Modal {
 			if (this.detailLoadingRunId === runId) this.detailLoadingRunId = null;
 			this.updateRunUi();
 		}
+	}
+
+	private readonly loadingDetailRunIds = new Set<string>();
+	private readonly sessionUserMessagesCache = new Map<string, { mtime: number; messages: string[] }>();
+
+	private async loadRunDetailIfNeeded(runId: string): Promise<void> {
+		if (this.loadingDetailRunIds.has(runId)) return;
+		if (this.agent.getRunDetail(runId)) return;
+		this.loadingDetailRunIds.add(runId);
+		try {
+			await this.agent.loadRunDetail(runId);
+		} catch {
+			// Handled gracefully; minimal run view or summary used
+		} finally {
+			this.loadingDetailRunIds.delete(runId);
+		}
+	}
+
+	private getSessionUserMessages(sessionFile: string): string[] {
+		if (!sessionFile) return [];
+		try {
+			const fs = (window as any).require ? (window as any).require("fs") : null;
+			if (!fs || !fs.existsSync(sessionFile)) return [];
+			const stat = fs.statSync(sessionFile);
+			const cached = this.sessionUserMessagesCache.get(sessionFile);
+			if (cached && cached.mtime === stat.mtimeMs) {
+				return cached.messages;
+			}
+			const content = fs.readFileSync(sessionFile, "utf-8");
+			const messages = extractSessionUserMessages(content);
+			this.sessionUserMessagesCache.set(sessionFile, { mtime: stat.mtimeMs, messages });
+			return messages;
+		} catch {
+			return [];
+		}
+	}
+
+	private getRunChain(displayedRun: RunView | undefined): RunView[] {
+		if (!displayedRun) return [];
+		const history = this.agent.getRunHistory(this.board.id, this.task.id);
+		const latest = this.agent.getRun(this.board.id, this.task.id);
+		const snapshot = this.agent.getSnapshot();
+		const ancestors = buildRunChain(displayedRun, history);
+
+		return ancestors.map((ancestor) => {
+			if (latest && ancestor.id === latest.id) {
+				return latest;
+			}
+			const detail = snapshot.runDetails[ancestor.id];
+			if (detail) {
+				return detail;
+			}
+			void this.loadRunDetailIfNeeded(ancestor.id);
+			return {
+				...ancestor,
+				logs: [],
+				nextCursor: 0,
+				pollError: "",
+			};
+		});
 	}
 
 	private displayedRun(): ReturnType<typeof selectDisplayedRun> {
@@ -776,45 +841,47 @@ export class TaskDetailModal extends Modal {
 			);
 		}
 
-		const run = displayed.run;
-		if (this.descFold && !this.userToggledDesc && run) {
+		const chain = this.getRunChain(displayed.run);
+		const leafRun = chain.at(-1) ?? displayed.run;
+		const rootRun = chain[0] ?? displayed.run;
+
+		if (this.descFold && !this.userToggledDesc && leafRun) {
 			this.descFold.open = false;
 		}
-		this.renderRunArtifacts(run);
+		this.renderRunArtifacts(leafRun, rootRun);
 		if (this.runSessionEl) {
-			const session = run?.sessionFile || run?.logPath || "";
+			const session = leafRun?.sessionFile || leafRun?.logPath || "";
 			this.runSessionEl.hidden = !session;
 			this.runSessionEl.setText(session ? `Session: ${session}` : "");
 			this.runSessionEl.title = session;
 		}
 		if (this.runWorktreeEl) {
-			const worktree = run?.worktreeRequested
-				? run.worktreeRemoved
-					? `Branch: ${run.branch} · worktree removed`
-					: run.worktreePath
-						? `Branch: ${run.branch} · ${run.worktreePath}`
+			const worktree = leafRun?.worktreeRequested
+				? leafRun.worktreeRemoved
+					? `Branch: ${leafRun.branch} · worktree removed`
+					: leafRun.worktreePath
+						? `Branch: ${leafRun.branch} · ${leafRun.worktreePath}`
 						: "Worktree: created when the run starts"
-				: run
+				: leafRun
 					? "Direct run (no worktree)"
 					: "";
 			this.runWorktreeEl.hidden = !worktree;
 			this.runWorktreeEl.setText(worktree);
-			this.runWorktreeEl.title = run?.worktreePath ?? "";
+			this.runWorktreeEl.title = leafRun?.worktreePath ?? "";
 		}
 		this.updateMessageUi(displayed.viewingHistory);
 		if (this.cleanupButton) {
 			const removable =
-				!!run?.worktreeRequested &&
-				!run.worktreeRemoved &&
-				!run.parentRunId &&
-				run.status !== "queued" &&
-				run.status !== "running" &&
-				!run.aborting;
+				!!leafRun?.worktreeRequested &&
+				!leafRun.worktreeRemoved &&
+				leafRun.status !== "queued" &&
+				leafRun.status !== "running" &&
+				!leafRun.aborting;
 			this.cleanupButton.hidden = !removable;
 			this.cleanupButton.disabled = !removable;
 		}
 
-		this.updateChatUi(run, displayed.viewingHistory);
+		this.updateChatUi(chain, displayed.viewingHistory);
 
 		if (latest && latest.logs.length === 0 && !active) {
 			void this.agent.refreshRunDetails(this.board.id, this.task.id);
@@ -904,7 +971,7 @@ export class TaskDetailModal extends Modal {
 		}
 	}
 
-	private renderRunArtifacts(run: RunView | undefined): void {
+	private renderRunArtifacts(run: RunView | undefined, rootRun?: RunView): void {
 		if (!this.runArtifactsEl) return;
 		this.runArtifactsEl.empty();
 		if (!run) {
@@ -974,7 +1041,6 @@ export class TaskDetailModal extends Modal {
 
 			const removable =
 				!isRemoved &&
-				!run.parentRunId &&
 				run.status !== "queued" &&
 				run.status !== "running" &&
 				!run.aborting;
@@ -988,7 +1054,7 @@ export class TaskDetailModal extends Modal {
 				setIcon(removeIcon, "trash-2");
 				removeBtn.addEventListener("click", (e) => {
 					e.stopPropagation();
-					void this.removeWorktree();
+					void this.removeWorktree(rootRun?.id ?? run.id);
 				});
 			}
 		}
@@ -1011,19 +1077,18 @@ export class TaskDetailModal extends Modal {
 		this.runArtifactsEl.hidden = !hasArtifacts;
 	}
 
-	private updateChatUi(run: RunView | undefined, viewingHistory: boolean): void {
+	private updateChatUi(chain: RunView[], viewingHistory: boolean): void {
 		if (!this.chatEl) return;
-		const events = run?.logs ?? [];
-		const lastSeq = events.at(-1)?.seq ?? 0;
 		const signature = [
-			run?.id ?? "",
-			run?.status ?? "",
-			run?.error ?? "",
+			chain
+				.map(
+					(r) =>
+						`${r.id}:${r.status}:${r.error}:${r.logs?.length ?? 0}:${r.logs?.at(-1)?.seq ?? 0}`
+				)
+				.join(";"),
 			viewingHistory ? "history" : "latest",
 			this.task.title,
 			this.task.description,
-			events.length,
-			lastSeq,
 		].join("\n");
 		if (signature === this.chatSignature) return;
 		this.chatSignature = signature;
@@ -1032,7 +1097,7 @@ export class TaskDetailModal extends Modal {
 			this.chatEl.scrollHeight - 24;
 		this.chatEl.empty();
 
-		if (!run) {
+		if (chain.length === 0) {
 			this.chatEl.createDiv({
 				cls: "wb-chat-empty",
 				text: "No conversation yet. Start a run to talk to the agent.",
@@ -1040,112 +1105,153 @@ export class TaskDetailModal extends Modal {
 			return;
 		}
 
+		const sessionFile = chain.find((r) => r.sessionFile)?.sessionFile ?? "";
+		const sessionUserMessages = sessionFile ? this.getSessionUserMessages(sessionFile) : [];
+
 		const description = this.task.description.trim();
-		const prompt =
+		const initialPrompt =
 			description && description !== this.task.title
 				? description.startsWith(this.task.title)
 					? description
 					: `${this.task.title}\n\n${description}`
 				: this.task.title;
-		this.appendChatMessage("user", "You", prompt);
-		const isRunning = run?.status === "running" || run?.status === "queued";
-		let toolLines: string[] = [];
-		let lastError = "";
-		const flushTools = () => {
-			if (!this.chatEl || toolLines.length === 0) return;
-			const steps = parseToolSteps(toolLines);
-			const details = this.chatEl.createEl("details", {
-				cls: "wb-chat-activity",
-			});
-			if (isRunning) {
-				details.open = true;
+
+		for (let runIndex = 0; runIndex < chain.length; runIndex++) {
+			const run = chain[runIndex];
+			const events = run.logs ?? [];
+			const isRunning = run.status === "running" || run.status === "queued";
+
+			const firstUserEvent = events.find((e) => e.kind === "user");
+			let turnPrompt = "";
+			let turnUserSeq = -1;
+
+			if (runIndex === 0) {
+				turnPrompt =
+					firstUserEvent?.text || run.prompt || sessionUserMessages[0] || initialPrompt;
+				if (firstUserEvent) turnUserSeq = firstUserEvent.seq;
+			} else {
+				turnPrompt =
+					firstUserEvent?.text ||
+					run.prompt ||
+					sessionUserMessages[runIndex] ||
+					"Continued conversation";
+				if (firstUserEvent) turnUserSeq = firstUserEvent.seq;
 			}
 
-			const summary = details.createEl("summary", { cls: "wb-chat-activity-summary" });
-			const summaryLeft = summary.createDiv({ cls: "wb-chat-activity-summary-left" });
-			const chevronEl = summaryLeft.createSpan({ cls: "wb-chat-activity-chevron" });
-			setIcon(chevronEl, "chevron-right");
-			const iconEl = summaryLeft.createSpan({ cls: "wb-chat-activity-icon" });
-			setIcon(iconEl, "terminal");
+			this.appendChatMessage("user", "You", turnPrompt);
 
-			const count = steps.length;
-			const failedCount = steps.filter((s) => s.status === "failed").length;
-			const isAnyRunning = steps.some((s) => s.status === "running") && isRunning;
-
-			const titleText = isAnyRunning
-				? `Running tools · ${count} step${count === 1 ? "" : "s"}`
-				: `Tool activity · ${count} step${count === 1 ? "" : "s"}`;
-			summaryLeft.createSpan({ cls: "wb-chat-activity-title", text: titleText });
-
-			if (failedCount > 0) {
-				summaryLeft.createSpan({
-					cls: "wb-chat-activity-badge wb-chat-activity-badge--failed",
-					text: `${failedCount} failed`,
+			let toolLines: string[] = [];
+			let lastError = "";
+			const flushTools = () => {
+				if (!this.chatEl || toolLines.length === 0) return;
+				const steps = parseToolSteps(toolLines);
+				const details = this.chatEl.createEl("details", {
+					cls: "wb-chat-activity",
 				});
-			}
-
-			const summaryRight = summary.createDiv({ cls: "wb-chat-activity-summary-right" });
-			if (isAnyRunning) {
-				summaryRight.createSpan({ cls: "wb-chat-activity-status is-running", text: "Running…" });
-			}
-
-			const list = details.createDiv({ cls: "wb-chat-activity-steps" });
-			for (const step of steps) {
-				const stepEl = list.createDiv({
-					cls: `wb-tool-step wb-tool-step--${step.status}`,
-				});
-				const stepIconEl = stepEl.createSpan({ cls: "wb-tool-step-icon" });
-				if (step.status === "failed") {
-					setIcon(stepIconEl, "x");
-				} else if (step.status === "running") {
-					setIcon(stepIconEl, "play");
-				} else {
-					setIcon(stepIconEl, "check");
+				if (isRunning) {
+					details.open = true;
 				}
 
-				stepEl.createSpan({ cls: "wb-tool-step-name", text: step.name });
-				stepEl.createSpan({
-					cls: "wb-tool-step-cmd",
-					text: step.command || step.raw,
-					attr: { title: step.raw },
-				});
-				if (step.duration) {
-					stepEl.createSpan({ cls: "wb-tool-step-duration", text: step.duration });
-				}
-			}
+				const summary = details.createEl("summary", { cls: "wb-chat-activity-summary" });
+				const summaryLeft = summary.createDiv({ cls: "wb-chat-activity-summary-left" });
+				const chevronEl = summaryLeft.createSpan({ cls: "wb-chat-activity-chevron" });
+				setIcon(chevronEl, "chevron-right");
+				const iconEl = summaryLeft.createSpan({ cls: "wb-chat-activity-icon" });
+				setIcon(iconEl, "terminal");
 
-			toolLines = [];
-		};
-		for (const event of events) {
-			if (event.kind === "status") continue;
-			if (
-				event.kind === "log" &&
-				/^(Turn started|Agent started|Queued|Abort requested|Succeeded|Failed|Cancelled)\.?$/.test(
-					event.text.trim()
-				)
-			) {
-				continue;
-			}
-			if (event.kind === "tool") {
-				toolLines.push(event.text);
-				continue;
+				const count = steps.length;
+				const failedCount = steps.filter((s) => s.status === "failed").length;
+				const isAnyRunning = steps.some((s) => s.status === "running") && isRunning;
+
+				const titleText = isAnyRunning
+					? `Running tools · ${count} step${count === 1 ? "" : "s"}`
+					: `Tool activity · ${count} step${count === 1 ? "" : "s"}`;
+				summaryLeft.createSpan({ cls: "wb-chat-activity-title", text: titleText });
+
+				if (failedCount > 0) {
+					summaryLeft.createSpan({
+						cls: "wb-chat-activity-badge wb-chat-activity-badge--failed",
+						text: `${failedCount} failed`,
+					});
+				}
+
+				const summaryRight = summary.createDiv({ cls: "wb-chat-activity-summary-right" });
+				if (isAnyRunning) {
+					summaryRight.createSpan({
+						cls: "wb-chat-activity-status is-running",
+						text: "Running…",
+					});
+				}
+
+				const list = details.createDiv({ cls: "wb-chat-activity-steps" });
+				for (const step of steps) {
+					const stepEl = list.createDiv({
+						cls: `wb-tool-step wb-tool-step--${step.status}`,
+					});
+					const stepIconEl = stepEl.createSpan({ cls: "wb-tool-step-icon" });
+					if (step.status === "failed") {
+						setIcon(stepIconEl, "x");
+					} else if (step.status === "running") {
+						setIcon(stepIconEl, "play");
+					} else {
+						setIcon(stepIconEl, "check");
+					}
+
+					stepEl.createSpan({ cls: "wb-tool-step-name", text: step.name });
+					stepEl.createSpan({
+						cls: "wb-tool-step-cmd",
+						text: step.command || step.raw,
+						attr: { title: step.raw },
+					});
+					if (step.duration) {
+						stepEl.createSpan({ cls: "wb-tool-step-duration", text: step.duration });
+					}
+				}
+
+				toolLines = [];
+			};
+
+			let hasAssistantResponse = false;
+			for (const event of events) {
+				if (event.kind === "status") continue;
+				if (
+					event.kind === "log" &&
+					/^(Turn started|Agent started|Queued|Abort requested|Succeeded|Failed|Cancelled)\.?$/.test(
+						event.text.trim()
+					)
+				) {
+					continue;
+				}
+				if (event.kind === "tool") {
+					toolLines.push(event.text);
+					continue;
+				}
+				flushTools();
+				if (event.kind === "assistant") {
+					hasAssistantResponse = true;
+					this.appendChatMessage("assistant", this.backendLabel(run), event.text, true);
+				} else if (event.kind === "user") {
+					if (event.seq === turnUserSeq) {
+						continue;
+					}
+					const label = event.mode === "steer" ? "You · steer" : "You";
+					this.appendChatMessage("user", label, event.text);
+				} else if (event.kind === "error") {
+					lastError = event.text;
+					this.appendChatMessage("error", "Error", event.text);
+				} else if (event.kind === "log") {
+					this.appendChatMessage("log", "Log", event.text);
+				}
 			}
 			flushTools();
-			if (event.kind === "assistant") {
-				this.appendChatMessage("assistant", this.backendLabel(run), event.text, true);
-			} else if (event.kind === "user") {
-				const label = event.mode === "steer" ? "You · steer" : "You";
-				this.appendChatMessage("user", label, event.text);
-			} else if (event.kind === "error") {
-				lastError = event.text;
-				this.appendChatMessage("error", "Error", event.text);
-			} else if (event.kind === "log") {
-				this.appendChatMessage("log", "Log", event.text);
+
+			if (!hasAssistantResponse && events.length === 0 && run.summary) {
+				this.appendChatMessage("assistant", this.backendLabel(run), run.summary, true);
 			}
+
+			const error = run.pollError || run.error;
+			if (error && error !== lastError) this.appendChatMessage("error", "Error", error);
 		}
-		flushTools();
-		const error = run.pollError || run.error;
-		if (error && error !== lastError) this.appendChatMessage("error", "Error", error);
 		if (stick) {
 			requestAnimationFrame(() => {
 				if (this.chatEl) this.chatEl.scrollTop = this.chatEl.scrollHeight;
@@ -1217,9 +1323,11 @@ export class TaskDetailModal extends Modal {
 		this.historySelect.empty();
 		this.historySelect.createEl("option", { value: "", text: "Latest" });
 		for (const run of history.slice(0, 20)) {
+			const isContinuation = !!run.parentRunId;
+			const prefix = isContinuation ? "↳ Turn · " : "";
 			this.historySelect.createEl("option", {
 				value: run.id,
-				text: `${runStatusLabel(run.status)} · ${this.runTimeFormatter.format(new Date(run.createdAt))}`,
+				text: `${prefix}${runStatusLabel(run.status)} · ${this.runTimeFormatter.format(new Date(run.createdAt))}`,
 			});
 		}
 		this.historySelect.value = selectedId;

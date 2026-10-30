@@ -1909,6 +1909,11 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	align-self: flex-end;
 	align-items: flex-end;
 	max-width: 86%;
+	margin-top: var(--size-4-3);
+}
+
+.wb-chat-msg--user:first-child {
+	margin-top: 0;
 }
 
 .wb-chat-msg--user .wb-chat-header {
