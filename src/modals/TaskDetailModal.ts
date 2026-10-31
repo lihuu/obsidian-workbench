@@ -67,9 +67,6 @@ export class TaskDetailModal extends Modal {
 	private unsubscribeAgent: (() => void) | undefined;
 	private runStatusEl: HTMLElement | undefined;
 	private runTitleEl: HTMLElement | undefined;
-	private runMetaEl: HTMLElement | undefined;
-	private runSessionEl: HTMLElement | undefined;
-	private runWorktreeEl: HTMLElement | undefined;
 	private runArtifactsEl: HTMLElement | undefined;
 	private runErrorEl: HTMLElement | undefined;
 	private chatEl: HTMLElement | undefined;
@@ -83,8 +80,6 @@ export class TaskDetailModal extends Modal {
 	private sendingMessage = false;
 	private runButton: HTMLButtonElement | undefined;
 	private abortButton: HTMLButtonElement | undefined;
-	private contextButton: HTMLButtonElement | undefined;
-	private contextEl: HTMLPreElement | undefined;
 	private starting = false;
 	private detailError = "";
 	private readonly runTimeFormatter = new Intl.DateTimeFormat(undefined, {
@@ -409,18 +404,6 @@ export class TaskDetailModal extends Modal {
 		this.runArtifactsEl = section.createDiv({ cls: "wb-run-artifacts" });
 		this.runArtifactsEl.hidden = true;
 
-		const details = section.createEl("details", { cls: "wb-chat-details" });
-		details.createEl("summary", { text: "Run details" });
-		this.runMetaEl = details.createDiv({ cls: "wb-run-meta" });
-		this.runSessionEl = details.createDiv({ cls: "wb-run-session" });
-		this.runWorktreeEl = details.createDiv({ cls: "wb-run-worktree" });
-		this.contextButton = details.createEl("button", {
-			cls: "wb-button wb-button--ghost wb-button--small wb-run-context-btn",
-			text: "Preview prompt context",
-		});
-		this.contextEl = details.createEl("pre", { cls: "wb-run-context" });
-		this.contextEl.hide();
-
 		this.chatComponent = new Component();
 		this.chatComponent.load();
 		this.chatEl = section.createDiv({ cls: "wb-chat" });
@@ -452,7 +435,6 @@ export class TaskDetailModal extends Modal {
 
 		this.runButton.addEventListener("click", () => void this.startRun());
 		this.abortButton.addEventListener("click", () => void this.abortRun());
-		this.contextButton.addEventListener("click", () => void this.previewContext());
 		this.sendButton.addEventListener("click", () => void this.sendChat());
 		this.clearQueueButton.addEventListener("click", () => void this.clearQueue());
 		this.messageInputEl.addEventListener("input", () => {
@@ -510,29 +492,6 @@ export class TaskDetailModal extends Modal {
 		} finally {
 			this.starting = false;
 			this.updateRunUi();
-		}
-	}
-
-	private async previewContext(): Promise<void> {
-		if (!this.titleInput || !this.contextEl) return;
-		if (this.contextEl.style.display !== "none" && !this.contextEl.hidden) {
-			this.contextEl.hide();
-			return;
-		}
-		const title = this.titleInput.value.trim() || this.task.title;
-		this.contextEl.hide();
-		this.contextEl.setText("Building context…");
-		this.contextEl.show();
-		try {
-			const context = await this.agent.buildContext(
-				{ id: this.board.id, name: this.board.name },
-				{ ...this.task, title, description: this.currentDescription() }
-			);
-			this.contextEl.setText(
-				`${context.noteCount} linked note(s) · ${context.images.length} image(s)\n\n${context.prompt}`
-			);
-		} catch (error) {
-			this.contextEl.setText(error instanceof Error ? error.message : String(error));
 		}
 	}
 
@@ -771,13 +730,6 @@ export class TaskDetailModal extends Modal {
 			this.runStatusEl.addClass(`wb-run-status--${latest.status}`);
 		}
 
-		if (this.runMetaEl) {
-			this.runMetaEl.setText(
-				workspace
-					? workspace
-					: "Set the board workspace from the header to enable runs."
-			);
-		}
 
 		const chain = this.getRunChain(displayed.run);
 		const leafRun = chain.at(-1) ?? displayed.run;
@@ -787,26 +739,6 @@ export class TaskDetailModal extends Modal {
 			this.descFold.open = false;
 		}
 		this.renderRunArtifacts(leafRun, rootRun);
-		if (this.runSessionEl) {
-			const session = leafRun?.sessionFile || leafRun?.logPath || "";
-			this.runSessionEl.hidden = !session;
-			this.runSessionEl.setText(session ? `Session: ${session}` : "");
-			this.runSessionEl.title = session;
-		}
-		if (this.runWorktreeEl) {
-			const worktree = leafRun?.worktreeRequested
-				? leafRun.worktreeRemoved
-					? `Branch: ${leafRun.branch} · worktree removed`
-					: leafRun.worktreePath
-						? `Branch: ${leafRun.branch} · ${leafRun.worktreePath}`
-						: "Worktree: created when the run starts"
-				: leafRun
-					? "Direct run (no worktree)"
-					: "";
-			this.runWorktreeEl.hidden = !worktree;
-			this.runWorktreeEl.setText(worktree);
-			this.runWorktreeEl.title = leafRun?.worktreePath ?? "";
-		}
 		this.updateMessageUi(displayed.viewingHistory);
 		this.updateChatUi(chain, displayed.viewingHistory);
 

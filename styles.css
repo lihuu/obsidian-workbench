@@ -1791,10 +1791,6 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	color: var(--text-muted);
 }
 
-.wb-task-modal .wb-chat-details {
-	flex-shrink: 0;
-}
-
 .wb-task-modal .wb-chat {
 	flex: 1 1 auto;
 	min-height: 120px;
@@ -1817,23 +1813,6 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	margin-top: 0;
 	padding-top: var(--size-4-2);
 	border-top: 1px solid var(--background-modifier-border);
-}
-
-.wb-chat-details {
-	display: block;
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-}
-
-.wb-chat-details summary {
-	cursor: pointer;
-}
-
-.wb-chat-details[open] {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding-bottom: var(--size-2-2);
 }
 
 .wb-chat {
@@ -2289,11 +2268,6 @@ summary.wb-chat-activity-summary::-webkit-details-marker {
 	}
 }
 
-.wb-run-meta {
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-	overflow-wrap: anywhere;
-}
 
 .wb-run-selection {
 	display: flex;
@@ -2442,8 +2416,7 @@ summary.wb-chat-activity-summary::-webkit-details-marker {
 	display: none;
 }
 
-.wb-field[hidden],
-.wb-run-session[hidden] {
+.wb-field[hidden] {
 	display: none;
 }
 
@@ -2469,35 +2442,6 @@ summary.wb-chat-activity-summary::-webkit-details-marker {
 	overflow-wrap: anywhere;
 }
 
-.wb-run-session {
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.wb-run-context-btn {
-	align-self: flex-start;
-	margin-top: var(--size-4-1);
-}
-
-.wb-run-context {
-	box-sizing: border-box;
-	max-height: 240px;
-	margin: var(--size-4-1) 0 0;
-	padding: var(--size-4-2);
-	overflow: auto;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	color: var(--text-muted);
-	font-family: var(--font-monospace-theme, var(--font-monospace));
-	font-size: var(--font-ui-smaller);
-	line-height: 1.45;
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
-}
 
 .wb-checkbox-field {
 	gap: var(--size-4-1);
@@ -2516,17 +2460,6 @@ summary.wb-chat-activity-summary::-webkit-details-marker {
 	margin: 0;
 }
 
-.wb-run-worktree {
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.wb-run-worktree[hidden] {
-	display: none;
-}
 
 .wb-column-role {
 	flex: 0 0 auto;
