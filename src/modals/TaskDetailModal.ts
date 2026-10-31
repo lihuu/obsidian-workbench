@@ -73,6 +73,7 @@ export class TaskDetailModal extends Modal {
 	private chatComponent: Component | undefined;
 	private chatSignature = "";
 	private messageComposerEl: HTMLElement | undefined;
+	private archivedBannerEl: HTMLElement | undefined;
 	private messageInputEl: HTMLTextAreaElement | undefined;
 	private sendButton: HTMLButtonElement | undefined;
 	private clearQueueButton: HTMLButtonElement | undefined;
@@ -432,6 +433,18 @@ export class TaskDetailModal extends Modal {
 		this.messageErrorEl = this.messageComposerEl.createDiv({ cls: "wb-form-error" });
 		this.messageErrorEl.hidden = true;
 
+		this.archivedBannerEl = chatBox.createDiv({ cls: "wb-chat-archived-banner" });
+		const bannerLeft = this.archivedBannerEl.createDiv({ cls: "wb-chat-archived-text" });
+		const archiveIcon = bannerLeft.createSpan({ cls: "wb-chat-archived-icon" });
+		setIcon(archiveIcon, "archive");
+		bannerLeft.createSpan({ text: "Worktree removed · Session closed" });
+		const newRunBtn = this.archivedBannerEl.createEl("button", {
+			cls: "wb-button wb-button--primary wb-button--small",
+			text: "Start new run",
+		});
+		newRunBtn.addEventListener("click", () => void this.startRun());
+		this.archivedBannerEl.hidden = true;
+
 		this.runErrorEl = section.createDiv({ cls: "wb-form-error" });
 		this.runErrorEl.hidden = true;
 
@@ -574,12 +587,24 @@ export class TaskDetailModal extends Modal {
 		const chain = this.getRunChain(displayed);
 		const rootRun = chain[0] ?? displayed;
 		const runIdToClean = targetRunId || rootRun.id;
-		try {
-			await this.agent.cleanupRunWorktree(runIdToClean);
-		} catch (error) {
-			this.detailError = error instanceof Error ? error.message : String(error);
-			this.updateRunUi();
-		}
+		new ConfirmModal(
+			this.app,
+			"Remove worktree",
+			"Are you sure you want to remove the worktree directory? The active workspace will be deleted and this session will be archived.",
+			"Remove",
+			async () => {
+				try {
+					await this.agent.cleanupRunWorktree(runIdToClean);
+					new Notice("Worktree removed.");
+					this.updateRunUi();
+				} catch (error) {
+					const msg = error instanceof Error ? error.message : String(error);
+					new Notice(`Failed to remove worktree: ${msg}`);
+					this.detailError = msg;
+					this.updateRunUi();
+				}
+			}
+		).open();
 	}
 
 	private async abortRun(): Promise<void> {
@@ -683,7 +708,8 @@ export class TaskDetailModal extends Modal {
 		if (this.runButton) {
 			const isRepeatable = (this.task as any).repeatable === true || (this.task as any).type === "recurring";
 			const canRetry = latest?.status === "failed";
-			const shouldShow = !latest || this.starting || isRepeatable || canRetry;
+			const worktreeRemoved = Boolean(latest?.worktreeRequested && latest?.worktreeRemoved);
+			const shouldShow = !latest || this.starting || isRepeatable || canRetry || worktreeRemoved;
 			this.runButton.hidden = !shouldShow;
 			this.runButton.disabled = !workspace || active || this.starting;
 			this.runButton.setText(
@@ -693,7 +719,9 @@ export class TaskDetailModal extends Modal {
 						? "Run again"
 						: canRetry
 							? "Retry"
-							: `Run with ${backendName}`
+							: worktreeRemoved
+								? "Start new run"
+								: `Run with ${backendName}`
 			);
 			this.runButton.title = workspace
 				? ""
@@ -750,8 +778,20 @@ export class TaskDetailModal extends Modal {
 	}
 
 	private updateMessageUi(viewingHistory = false): void {
-		if (!this.messageComposerEl) return;
 		const latest = this.agent.getRun(this.board.id, this.task.id);
+		const isWorktreeRemoved = Boolean(latest?.worktreeRequested && latest?.worktreeRemoved);
+
+		if (this.archivedBannerEl) {
+			this.archivedBannerEl.hidden = viewingHistory || !isWorktreeRemoved;
+		}
+
+		if (!this.messageComposerEl) return;
+
+		if (isWorktreeRemoved) {
+			this.messageComposerEl.hidden = true;
+			return;
+		}
+
 		const canFollow = runCanFollowUp(latest);
 		const canSteer = runCanSteer(latest);
 		const canClear = runCanClearQueue(latest);

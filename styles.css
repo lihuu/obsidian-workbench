@@ -1827,6 +1827,39 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	background: var(--background-primary);
 }
 
+.wb-chat-archived-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	background: var(--background-secondary);
+	border-top: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-chat-archived-banner[hidden] {
+	display: none;
+}
+
+.wb-chat-archived-text {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.wb-chat-archived-icon {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-faint);
+}
+
+.wb-chat-archived-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
 .wb-task-modal .wb-modal-footer {
 	flex-shrink: 0;
 	margin-top: 0;

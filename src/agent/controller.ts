@@ -524,25 +524,90 @@ export class AgentController implements Readable<AgentSnapshot> {
 	}
 
 	async cleanupRunWorktree(runId: string): Promise<void> {
-		const page = await this.client.cleanupWorktree(runId);
-		const view = toView(page);
+		let view: RunView | undefined;
+		try {
+			const page = await this.client.cleanupWorktree(runId);
+			view = toView(page);
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error);
+			if (
+				msg.includes("no removable worktree") ||
+				msg.includes("already removed") ||
+				msg.includes("does not exist")
+			) {
+				// Worktree is already removed on the backend; reconcile local state
+			} else {
+				throw error;
+			}
+		}
+
 		this.state.update((snapshot) => {
+			const targetRun =
+				view ??
+				Object.values(snapshot.runs).find((r) => r.id === runId) ??
+				Object.values(snapshot.history)
+					.flat()
+					.find((r) => r.id === runId);
+			const worktreePath = view?.worktreePath || targetRun?.worktreePath;
+
+			const affectedKeys = new Set<string>();
+			for (const [key, run] of Object.entries(snapshot.runs)) {
+				if (
+					run.id === runId ||
+					(worktreePath && run.worktreePath === worktreePath)
+				) {
+					affectedKeys.add(key);
+				}
+			}
+			for (const [key, list] of Object.entries(snapshot.history)) {
+				if (
+					list.some(
+						(r) =>
+							r.id === runId ||
+							(worktreePath && r.worktreePath === worktreePath)
+					)
+				) {
+					affectedKeys.add(key);
+				}
+			}
+
 			const runs = { ...snapshot.runs };
 			for (const [key, run] of Object.entries(runs)) {
-				if (run.id === runId) runs[key] = { ...run, ...view };
+				if (
+					affectedKeys.has(key) ||
+					run.id === runId ||
+					(worktreePath && run.worktreePath === worktreePath)
+				) {
+					runs[key] = { ...run, worktreeRemoved: true };
+				}
 			}
 			const history = { ...snapshot.history };
 			for (const [key, list] of Object.entries(history)) {
-				if (!list.some((run) => run.id === runId)) continue;
-				history[key] = list.map((run) =>
-					run.id === runId ? runSnapshotFromView(view) : run
-				);
+				if (affectedKeys.has(key)) {
+					history[key] = list.map((run) =>
+						affectedKeys.has(key) ||
+						run.id === runId ||
+						(worktreePath && run.worktreePath === worktreePath)
+							? { ...run, worktreeRemoved: true }
+							: run
+					);
+				}
+			}
+			const runDetails = { ...snapshot.runDetails };
+			if (view) runDetails[runId] = view;
+			for (const [id, detail] of Object.entries(runDetails)) {
+				if (
+					detail.id === runId ||
+					(worktreePath && detail.worktreePath === worktreePath)
+				) {
+					runDetails[id] = { ...detail, worktreeRemoved: true };
+				}
 			}
 			return {
 				...snapshot,
 				runs,
 				history,
-				runDetails: { ...snapshot.runDetails, [runId]: view },
+				runDetails,
 			};
 		});
 	}
