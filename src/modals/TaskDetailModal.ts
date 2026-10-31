@@ -404,13 +404,15 @@ export class TaskDetailModal extends Modal {
 		this.runArtifactsEl = section.createDiv({ cls: "wb-run-artifacts" });
 		this.runArtifactsEl.hidden = true;
 
+		const chatBox = section.createDiv({ cls: "wb-chat-box" });
+
 		this.chatComponent = new Component();
 		this.chatComponent.load();
-		this.chatEl = section.createDiv({ cls: "wb-chat" });
+		this.chatEl = chatBox.createDiv({ cls: "wb-chat" });
 		this.chatEl.setAttr("role", "log");
 		this.chatEl.setAttr("aria-live", "polite");
 
-		this.messageComposerEl = section.createDiv({ cls: "wb-chat-composer" });
+		this.messageComposerEl = chatBox.createDiv({ cls: "wb-chat-composer" });
 		const composerRow = this.messageComposerEl.createDiv({ cls: "wb-chat-composer-row" });
 		this.messageInputEl = composerRow.createEl("textarea", {
 			cls: "wb-input wb-chat-input",
