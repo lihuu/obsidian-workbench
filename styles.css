@@ -608,7 +608,19 @@ select.wb-run-backend-select {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	padding-bottom: 0;
+	padding: 0;
+}
+
+.wb-task-modal .modal-header {
+	padding: var(--size-4-3) var(--size-4-5);
+	margin: 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	flex-shrink: 0;
+}
+
+.wb-task-modal .modal-header-button {
+	top: 14px;
+	right: 16px;
 }
 
 .wb-task-modal .wb-modal-content {
@@ -620,8 +632,8 @@ select.wb-run-backend-select {
 	overflow-y: auto;
 	scrollbar-gutter: stable;
 	scrollbar-width: thin;
-	gap: var(--size-4-2);
-	padding-right: var(--size-4-2);
+	gap: var(--size-4-3);
+	padding: var(--size-4-4) var(--size-4-5);
 }
 
 .wb-task-modal .wb-field--title {
@@ -1893,7 +1905,7 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	flex-shrink: 0;
 	position: static;
 	margin: 0;
-	padding: var(--size-4-2) var(--size-4-4) var(--size-4-3) var(--size-4-4);
+	padding: var(--size-4-3) var(--size-4-5);
 	border-top: 1px solid var(--background-modifier-border);
 	background: var(--background-primary);
 }
