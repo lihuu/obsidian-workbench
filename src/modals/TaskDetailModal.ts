@@ -84,7 +84,6 @@ export class TaskDetailModal extends Modal {
 	private runButton: HTMLButtonElement | undefined;
 	private abortButton: HTMLButtonElement | undefined;
 	private contextButton: HTMLButtonElement | undefined;
-	private cleanupButton: HTMLButtonElement | undefined;
 	private contextEl: HTMLPreElement | undefined;
 	private starting = false;
 	private detailError = "";
@@ -415,6 +414,12 @@ export class TaskDetailModal extends Modal {
 		this.runMetaEl = details.createDiv({ cls: "wb-run-meta" });
 		this.runSessionEl = details.createDiv({ cls: "wb-run-session" });
 		this.runWorktreeEl = details.createDiv({ cls: "wb-run-worktree" });
+		this.contextButton = details.createEl("button", {
+			cls: "wb-button wb-button--ghost wb-button--small wb-run-context-btn",
+			text: "Preview prompt context",
+		});
+		this.contextEl = details.createEl("pre", { cls: "wb-run-context" });
+		this.contextEl.hide();
 
 		this.chatComponent = new Component();
 		this.chatComponent.load();
@@ -442,25 +447,12 @@ export class TaskDetailModal extends Modal {
 		this.messageErrorEl = this.messageComposerEl.createDiv({ cls: "wb-form-error" });
 		this.messageErrorEl.hidden = true;
 
-		const tools = section.createDiv({ cls: "wb-chat-tools" });
-		this.contextButton = tools.createEl("button", {
-			cls: "wb-button wb-button--ghost wb-button--small",
-			text: "Preview context",
-		});
-		this.cleanupButton = tools.createEl("button", {
-			cls: "wb-button wb-button--ghost wb-button--small",
-			text: "Remove worktree",
-		});
-		this.cleanupButton.hidden = true;
-		this.contextEl = section.createEl("pre", { cls: "wb-run-context" });
-		this.contextEl.hide();
 		this.runErrorEl = section.createDiv({ cls: "wb-form-error" });
 		this.runErrorEl.hidden = true;
 
 		this.runButton.addEventListener("click", () => void this.startRun());
 		this.abortButton.addEventListener("click", () => void this.abortRun());
 		this.contextButton.addEventListener("click", () => void this.previewContext());
-		this.cleanupButton.addEventListener("click", () => void this.removeWorktree());
 		this.sendButton.addEventListener("click", () => void this.sendChat());
 		this.clearQueueButton.addEventListener("click", () => void this.clearQueue());
 		this.messageInputEl.addEventListener("input", () => {
@@ -523,6 +515,10 @@ export class TaskDetailModal extends Modal {
 
 	private async previewContext(): Promise<void> {
 		if (!this.titleInput || !this.contextEl) return;
+		if (this.contextEl.style.display !== "none" && !this.contextEl.hidden) {
+			this.contextEl.hide();
+			return;
+		}
 		const title = this.titleInput.value.trim() || this.task.title;
 		this.contextEl.hide();
 		this.contextEl.setText("Building context…");
@@ -617,7 +613,6 @@ export class TaskDetailModal extends Modal {
 		const chain = this.getRunChain(displayed);
 		const rootRun = chain[0] ?? displayed;
 		const runIdToClean = targetRunId || rootRun.id;
-		if (this.cleanupButton) this.cleanupButton.disabled = true;
 		try {
 			await this.agent.cleanupRunWorktree(runIdToClean);
 		} catch (error) {
@@ -813,17 +808,6 @@ export class TaskDetailModal extends Modal {
 			this.runWorktreeEl.title = leafRun?.worktreePath ?? "";
 		}
 		this.updateMessageUi(displayed.viewingHistory);
-		if (this.cleanupButton) {
-			const removable =
-				!!leafRun?.worktreeRequested &&
-				!leafRun.worktreeRemoved &&
-				leafRun.status !== "queued" &&
-				leafRun.status !== "running" &&
-				!leafRun.aborting;
-			this.cleanupButton.hidden = !removable;
-			this.cleanupButton.disabled = !removable;
-		}
-
 		this.updateChatUi(chain, displayed.viewingHistory);
 
 		if (latest && latest.logs.length === 0 && !active) {

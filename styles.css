@@ -1812,11 +1812,6 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	background: var(--background-primary);
 }
 
-.wb-task-modal .wb-chat-tools {
-	flex-shrink: 0;
-	padding: 0 0 var(--size-2-2);
-}
-
 .wb-task-modal .wb-modal-footer {
 	flex-shrink: 0;
 	margin-top: 0;
@@ -2271,16 +2266,11 @@ summary.wb-chat-activity-summary::-webkit-details-marker {
 	flex: 0 0 auto;
 }
 
-.wb-chat-composer-actions,
-.wb-chat-tools {
+.wb-chat-composer-actions {
 	display: flex;
 	align-items: center;
 	gap: var(--size-2-2);
 	flex-wrap: wrap;
-}
-
-.wb-chat-tools {
-	padding-top: 2px;
 }
 
 @media (max-width: 600px) {
@@ -2487,10 +2477,15 @@ summary.wb-chat-activity-summary::-webkit-details-marker {
 	white-space: nowrap;
 }
 
+.wb-run-context-btn {
+	align-self: flex-start;
+	margin-top: var(--size-4-1);
+}
+
 .wb-run-context {
 	box-sizing: border-box;
 	max-height: 240px;
-	margin: 0;
+	margin: var(--size-4-1) 0 0;
 	padding: var(--size-4-2);
 	overflow: auto;
 	background: var(--background-secondary);
