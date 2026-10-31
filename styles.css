@@ -595,9 +595,11 @@ select.wb-input:hover {
 	max-height: none;
 	display: flex;
 	flex-direction: column;
-	overflow: hidden;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
 	gap: var(--size-4-2);
-	padding-right: 0;
+	padding-right: var(--size-4-1);
 }
 
 .wb-task-modal .wb-field--title {
@@ -1679,11 +1681,10 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 }
 
 .wb-task-modal .wb-run-section {
-	flex: 1 1 auto;
-	min-height: 0;
+	flex: 1 0 auto;
+	min-height: 280px;
 	display: flex;
 	flex-direction: column;
-	overflow: hidden;
 	padding-top: var(--size-4-2);
 	border-top: 1px solid var(--background-modifier-border);
 	gap: var(--size-4-2);
@@ -1801,7 +1802,7 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
-	min-height: 140px;
+	min-height: 200px;
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
@@ -1867,9 +1868,14 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 }
 
 .wb-task-modal .wb-modal-footer {
+	position: sticky;
+	bottom: 0;
+	background: var(--background-primary);
+	z-index: 10;
 	flex-shrink: 0;
-	margin-top: 0;
+	margin-top: auto;
 	padding-top: var(--size-4-2);
+	padding-bottom: var(--size-4-1);
 	border-top: 1px solid var(--background-modifier-border);
 }
 
