@@ -54,6 +54,10 @@ export class TaskDetailModal extends Modal {
 	private deleteTimer: number | undefined;
 	private allowClose = false;
 	private titleInput: HTMLInputElement | undefined;
+	private titleErrorEl: HTMLElement | undefined;
+	private saveButton: HTMLButtonElement | undefined;
+	private backendSelect: HTMLSelectElement | undefined;
+	private selectedBackend: string | undefined;
 	private descriptionInput: HTMLTextAreaElement | undefined;
 	private errorEl: HTMLElement | undefined;
 	private descFold: HTMLDetailsElement | undefined;
@@ -109,6 +113,7 @@ export class TaskDetailModal extends Modal {
 		this.onMoveToDone = onMoveToDone;
 		this.isNew = options.isNew === true;
 		this.onDiscard = options.onDiscard;
+		this.selectedBackend = task.backend || board.agent?.backend;
 	}
 
 	onOpen(): void {
@@ -117,6 +122,7 @@ export class TaskDetailModal extends Modal {
 		this.modalEl.addClass("wb-task-modal");
 		this.contentEl.addClass("wb-modal-content");
 		this.contentEl.empty();
+		this.modalEl.querySelectorAll(".wb-modal-footer").forEach((el) => el.remove());
 
 		const titleField = this.contentEl.createDiv({ cls: "wb-field wb-field--title" });
 		const titleLabel = titleField.createEl("label", { cls: "wb-field-label", text: "Title" });
@@ -127,6 +133,14 @@ export class TaskDetailModal extends Modal {
 		this.titleInput = titleInput;
 		titleInput.id = `wb-task-title-${this.task.id}`;
 		titleLabel.htmlFor = titleInput.id;
+
+		const titleErrorEl = titleField.createDiv({ cls: "wb-form-error" });
+		titleErrorEl.hide();
+		this.titleErrorEl = titleErrorEl;
+
+		titleInput.addEventListener("input", () => {
+			this.updateTitleValidation();
+		});
 
 		const hasRuns =
 			!!this.agent.getRun(this.board.id, this.task.id) ||
@@ -241,7 +255,7 @@ export class TaskDetailModal extends Modal {
 		this.renderGitHubSection();
 		this.renderRunSection();
 
-		const footer = this.contentEl.createDiv({ cls: "wb-modal-footer" });
+		const footer = this.modalEl.createDiv({ cls: "wb-modal-footer" });
 		const deleteButton = footer.createEl("button", {
 			cls: "wb-button wb-button--danger",
 			text: "Delete",
@@ -252,10 +266,15 @@ export class TaskDetailModal extends Modal {
 			cls: "wb-button wb-button--primary",
 			text: "Save",
 		});
+		this.saveButton = saveButton;
 
 		titleInput.addEventListener("keydown", (event) => {
 			if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229) {
 				event.preventDefault();
+				if (!this.updateTitleValidation()) {
+					this.titleInput?.focus();
+					return;
+				}
 				this.close();
 			}
 		});
@@ -280,14 +299,14 @@ export class TaskDetailModal extends Modal {
 
 		cancelButton.addEventListener("click", () => this.close());
 		saveButton.addEventListener("click", () => {
-			if (this.isNew && !(this.titleInput?.value.trim() ?? "")) {
-				this.errorEl?.setText("Title can't be empty.");
-				this.errorEl?.show();
+			if (!this.updateTitleValidation()) {
 				this.titleInput?.focus();
 				return;
 			}
 			this.close();
 		});
+
+		this.updateTitleValidation();
 
 		this.setPreview(true);
 
@@ -392,6 +411,18 @@ export class TaskDetailModal extends Modal {
 		const header = section.createDiv({ cls: "wb-run-header" });
 		this.runTitleEl = header.createDiv({ cls: "wb-run-title", text: "Agent" });
 		const headerRight = header.createDiv({ cls: "wb-run-header-right" });
+
+		const backendSelect = headerRight.createEl("select", {
+			cls: "wb-input wb-run-backend-select",
+			attr: { "aria-label": "Execution backend" },
+		});
+		this.backendSelect = backendSelect;
+		backendSelect.addEventListener("change", () => {
+			this.selectedBackend = backendSelect.value;
+			this.onSave({ backend: this.selectedBackend });
+			this.updateRunUi();
+		});
+
 		this.runStatusEl = headerRight.createDiv({ cls: "wb-run-status" });
 		this.runButton = headerRight.createEl("button", {
 			cls: "wb-button wb-button--primary wb-button--small",
@@ -479,25 +510,106 @@ export class TaskDetailModal extends Modal {
 		return this.descriptionInput?.value ?? this.task.description;
 	}
 
+	private updateTitleValidation(): boolean {
+		const rawTitle = this.titleInput?.value ?? "";
+		const trimmedTitle = rawTitle.trim();
+		const isValid = trimmedTitle.length > 0;
+
+		if (this.saveButton) {
+			this.saveButton.disabled = !isValid;
+		}
+
+		if (!isValid) {
+			this.titleInput?.addClass("is-invalid");
+			this.titleErrorEl?.setText("Title can't be empty.");
+			this.titleErrorEl?.show();
+		} else {
+			this.titleInput?.removeClass("is-invalid");
+			this.titleErrorEl?.setText("");
+			this.titleErrorEl?.hide();
+			if (this.errorEl && this.errorEl.getText() === "Title can't be empty.") {
+				this.errorEl.setText("");
+				this.errorEl.hide();
+			}
+		}
+
+		if (this.runButton) {
+			this.updateRunUi();
+		}
+
+		return isValid;
+	}
+
+	private populateBackendOptions(): void {
+		if (!this.backendSelect) return;
+		const health = this.agent.getSnapshot().health;
+		const knownBackends =
+			health.backends.length > 0
+				? health.backends
+				: [
+						{ id: "pi", displayName: "Pi", available: true },
+						{ id: "omp", displayName: "OMP", available: true },
+						{ id: "opencode", displayName: "OpenCode", available: true },
+					];
+
+		const currentId = this.currentBackendId();
+		this.backendSelect.empty();
+		for (const backend of knownBackends) {
+			const opt = this.backendSelect.createEl("option", {
+				value: backend.id,
+				text: backend.displayName,
+			});
+			if (!backend.available) {
+				opt.text += " (unavailable)";
+			}
+		}
+
+		if (currentId && !knownBackends.some((b) => b.id === currentId)) {
+			this.backendSelect.createEl("option", {
+				value: currentId,
+				text: currentId.toUpperCase(),
+			});
+		}
+		this.backendSelect.value = currentId;
+	}
+
+	private currentBackendId(): string {
+		const latest = this.agent.getRun(this.board.id, this.task.id);
+		if (latest?.backendId) return latest.backendId;
+		const health = this.agent.getSnapshot().health;
+		return (
+			this.selectedBackend ||
+			this.task.backend ||
+			this.board.agent?.backend ||
+			health.defaultBackend ||
+			"pi"
+		);
+	}
+
 	private async startRun(): Promise<void> {
 		if (this.starting) return;
-		const title = this.titleInput?.value.trim() ?? this.task.title;
+		const title = this.titleInput?.value.trim() ?? "";
 		if (!title) {
-			this.errorEl?.setText("Title can't be empty.");
-			this.errorEl?.show();
+			this.updateTitleValidation();
+			this.titleInput?.focus();
 			return;
 		}
 		this.starting = true;
 		this.updateRunUi();
 		if (this.runErrorEl) this.runErrorEl.hidden = true;
 		const description = this.currentDescription();
+		const backend = this.currentBackendId();
 		try {
-			if (title !== this.task.title || description !== this.task.description) {
-				this.onSave({ title, description });
+			const patch: TaskPatch = {};
+			if (title !== this.task.title) patch.title = title;
+			if (description !== this.task.description) patch.description = description;
+			if (backend !== this.task.backend) patch.backend = backend;
+			if (Object.keys(patch).length > 0) {
+				this.onSave(patch);
 			}
 			const run = await this.agent.startRun(
 				this.board,
-				{ ...this.task, title, description }
+				{ ...this.task, title, description, backend }
 			);
 			this.onRunState(run);
 			this.detailError = "";
@@ -700,18 +812,29 @@ export class TaskDetailModal extends Modal {
 		const latest = this.agent.getRun(this.board.id, this.task.id);
 		const active = latest?.status === "queued" || latest?.status === "running";
 		const displayed = this.displayedRun();
+		const worktreeRemoved = Boolean(latest?.worktreeRequested && latest?.worktreeRemoved);
+		const sessionLocked = Boolean(latest && !worktreeRemoved);
 		const backendName = this.backendLabel(latest);
+
+		if (this.backendSelect) {
+			this.populateBackendOptions();
+			this.backendSelect.value = latest?.backendId || this.currentBackendId();
+			this.backendSelect.disabled = sessionLocked || active || this.starting;
+			this.backendSelect.title = sessionLocked
+				? `Session is bound to ${latest?.backendName || backendName}`
+				: "Select execution backend for this task";
+		}
 
 		if (this.runTitleEl) {
 			this.runTitleEl.setText(`${backendName} agent`);
 		}
 		if (this.runButton) {
+			const hasTitle = (this.titleInput?.value.trim() ?? this.task.title).length > 0;
 			const isRepeatable = (this.task as any).repeatable === true || (this.task as any).type === "recurring";
 			const canRetry = latest?.status === "failed";
-			const worktreeRemoved = Boolean(latest?.worktreeRequested && latest?.worktreeRemoved);
 			const shouldShow = !latest || this.starting || isRepeatable || canRetry || worktreeRemoved;
 			this.runButton.hidden = !shouldShow;
-			this.runButton.disabled = !workspace || active || this.starting;
+			this.runButton.disabled = !workspace || active || this.starting || !hasTitle;
 			this.runButton.setText(
 				this.starting
 					? "Starting…"
@@ -723,9 +846,11 @@ export class TaskDetailModal extends Modal {
 								? "Start new run"
 								: `Run with ${backendName}`
 			);
-			this.runButton.title = workspace
-				? ""
-				: "Set a local workspace in the board header first.";
+			this.runButton.title = !hasTitle
+				? "Title can't be empty."
+				: workspace
+					? ""
+					: "Set a local workspace in the board header first.";
 		}
 		if (this.abortButton) {
 			this.abortButton.hidden = !active;
@@ -1200,7 +1325,7 @@ export class TaskDetailModal extends Modal {
 	private backendLabel(run: RunView | undefined): string {
 		if (run?.backendName) return run.backendName;
 		const health = this.agent.getSnapshot().health;
-		const id = this.board.agent?.backend || health.defaultBackend;
+		const id = this.currentBackendId();
 		const backend = health.backends.find((entry) => entry.id === id);
 		return backend?.displayName || (id ? id.toUpperCase() : "Agent");
 	}
@@ -1260,22 +1385,23 @@ export class TaskDetailModal extends Modal {
 			super.close();
 			return;
 		}
-		const title = this.titleInput?.value.trim() ?? this.task.title;
+		const title = this.titleInput?.value.trim() ?? "";
 		if (!title) {
 			if (this.isNew) {
 				this.onDiscard?.();
-				this.allowClose = true;
-				super.close();
-				return;
 			}
-			this.errorEl?.setText("Title can't be empty.");
-			this.errorEl?.show();
-			this.titleInput?.focus();
+			this.allowClose = true;
+			super.close();
 			return;
 		}
 		const description = this.descriptionInput?.value ?? this.task.description;
-		if (title !== this.task.title || description !== this.task.description) {
-			this.onSave({ title, description });
+		const backend = this.selectedBackend;
+		const patch: TaskPatch = {};
+		if (title !== this.task.title) patch.title = title;
+		if (description !== this.task.description) patch.description = description;
+		if (backend !== undefined && backend !== this.task.backend) patch.backend = backend;
+		if (Object.keys(patch).length > 0) {
+			this.onSave(patch);
 		}
 		this.allowClose = true;
 		super.close();
