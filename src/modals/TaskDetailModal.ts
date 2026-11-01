@@ -308,7 +308,8 @@ export class TaskDetailModal extends Modal {
 
 		this.updateTitleValidation();
 
-		this.setPreview(true);
+		const hasDescription = Boolean(this.task.description && this.task.description.trim().length > 0);
+		this.setPreview(hasDescription, false);
 
 		if (!Platform.isMobile) {
 			window.setTimeout(() => {
@@ -1330,7 +1331,7 @@ export class TaskDetailModal extends Modal {
 		return backend?.displayName || (id ? id.toUpperCase() : "Agent");
 	}
 
-	private setPreview(visible: boolean): void {
+	private setPreview(visible: boolean, focus = true): void {
 		if (!this.previewEl || !this.descriptionInput) return;
 		this.previewVisible = visible;
 		if (visible) {
@@ -1344,7 +1345,9 @@ export class TaskDetailModal extends Modal {
 			this.previewEl.hide();
 			this.previewButton?.setText("Preview");
 			this.linkButton?.show();
-			this.descriptionInput.focus();
+			if (focus) {
+				this.descriptionInput.focus();
+			}
 		}
 	}
 
