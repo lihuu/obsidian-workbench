@@ -12,7 +12,7 @@ automatically, installs the latest GitHub release into
 
 ```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/lihuu/obsidian-workbench/main/install-workbench.sh \
+  https://raw.githubusercontent.com/lihuu/obsidian-workbench/master/install-workbench.sh \
   -o install-workbench.sh
 chmod +x install-workbench.sh
 ./install-workbench.sh
@@ -182,7 +182,7 @@ cloudflared tunnel route dns workbench workbench.example.com
 
 ```yaml
 tunnel: workbench
-credentials-file: /Users/lihu/.cloudflared/<tunnel-id>.json
+credentials-file: ~/.cloudflared/<tunnel-id>.json
 
 ingress:
   - hostname: workbench.example.com
@@ -194,7 +194,7 @@ Run:
 
 ```bash
 export WORKBENCH_RUNNER_TOKEN="$(openssl rand -hex 32)"
-cd /Users/lihu/Obsidian/obsidian-workbench-ready
+cd path/to/obsidian-workbench
 npm run runner
 cloudflared tunnel run workbench
 ```
