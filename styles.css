@@ -1843,7 +1843,6 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 120px;
-	max-height: 420px;
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
