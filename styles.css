@@ -1670,6 +1670,13 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	gap: var(--size-4-2);
 }
 
+.wb-run-header-left {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	min-width: 0;
+}
+
 .wb-run-title {
 	font-size: var(--font-ui-small);
 	font-weight: var(--font-semibold);

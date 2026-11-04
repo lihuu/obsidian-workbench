@@ -71,6 +71,7 @@ export class TaskDetailModal extends Modal {
 	private unsubscribeAgent: (() => void) | undefined;
 	private runStatusEl: HTMLElement | undefined;
 	private runTitleEl: HTMLElement | undefined;
+	private runDurationEl: HTMLElement | undefined;
 	private runArtifactsEl: HTMLElement | undefined;
 	private runErrorEl: HTMLElement | undefined;
 	private chatEl: HTMLElement | undefined;
@@ -410,7 +411,12 @@ export class TaskDetailModal extends Modal {
 	private renderRunSection(): void {
 		const section = this.contentEl.createDiv({ cls: "wb-run-section" });
 		const header = section.createDiv({ cls: "wb-run-header" });
-		this.runTitleEl = header.createDiv({ cls: "wb-run-title", text: "Agent" });
+		const headerLeft = header.createDiv({ cls: "wb-run-header-left" });
+		this.runTitleEl = headerLeft.createDiv({ cls: "wb-run-title", text: "Agent" });
+		this.runDurationEl = headerLeft.createDiv({
+			cls: "wb-artifact-pill wb-artifact-pill--duration",
+		});
+		this.runDurationEl.hidden = true;
 		const headerRight = header.createDiv({ cls: "wb-run-header-right" });
 
 		const backendSelect = headerRight.createEl("select", {
@@ -998,6 +1004,22 @@ export class TaskDetailModal extends Modal {
 	}
 
 	private renderRunArtifacts(run: RunView | undefined, rootRun?: RunView): void {
+		if (this.runDurationEl) {
+			this.runDurationEl.empty();
+			const duration = run ? formatRunDuration(run.startedAt, run.endedAt) : "";
+			if (duration) {
+				const durIcon = this.runDurationEl.createSpan({ cls: "wb-artifact-icon" });
+				setIcon(durIcon, "clock");
+				this.runDurationEl.createSpan({ cls: "wb-artifact-label", text: duration });
+				this.runDurationEl.title = run?.endedAt
+					? `Run duration: ${duration}`
+					: `Running for: ${duration}`;
+				this.runDurationEl.hidden = false;
+			} else {
+				this.runDurationEl.hidden = true;
+			}
+		}
+
 		if (!this.runArtifactsEl) return;
 		this.runArtifactsEl.empty();
 		if (!run) {
@@ -1083,21 +1105,6 @@ export class TaskDetailModal extends Modal {
 					void this.removeWorktree(rootRun?.id ?? run.id);
 				});
 			}
-		}
-
-		// 3. Duration Pill
-		const duration = formatRunDuration(run.startedAt, run.endedAt);
-		if (duration) {
-			hasArtifacts = true;
-			const durPill = this.runArtifactsEl.createDiv({
-				cls: "wb-artifact-pill wb-artifact-pill--duration",
-				attr: {
-					title: run.endedAt ? `Run duration: ${duration}` : `Running for: ${duration}`,
-				},
-			});
-			const durIcon = durPill.createSpan({ cls: "wb-artifact-icon" });
-			setIcon(durIcon, "clock");
-			durPill.createSpan({ cls: "wb-artifact-label", text: duration });
 		}
 
 		this.runArtifactsEl.hidden = !hasArtifacts;
