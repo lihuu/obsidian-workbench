@@ -748,14 +748,16 @@ async function enqueueRun(body, options = {}) {
 	let log;
 	try {
 		await fsp.mkdir(runDir, { recursive: true });
-		const logPath = path.join(runDir, "events.jsonl");
-		log = fs.createWriteStream(logPath, { flags: "a" });
-		log.on("error", () => {
-			// A broken diagnostics file must not kill the run.
-		});
-		session.setLogPath(logPath);
+		if (process.env.WORKBENCH_DEBUG_EVENTS === "1") {
+			const logPath = path.join(runDir, "events.jsonl");
+			log = fs.createWriteStream(logPath, { flags: "a" });
+			log.on("error", () => {
+				// A broken diagnostics file must not kill the run.
+			});
+			session.setLogPath(logPath);
+		}
 	} catch {
-		session.emit("log", "Runner could not create a local log file.");
+		session.emit("log", "Runner could not create a local run directory.");
 	}
 	session.emit("log", pending.length === 0 ? "Queued." : `Queued behind ${pending.length} run(s).`);
 	persistRun(session);
