@@ -8,6 +8,7 @@
 		githubStateLabel,
 	} from "../agent/github";
 	import MarkdownPreview from "./MarkdownPreview.svelte";
+	import { icon } from "./icon";
 
 	let descriptionEl: HTMLDivElement | undefined = $state();
 	let expanded = $state(false);
@@ -176,7 +177,8 @@
 				onpointerdown={(event) => event.stopPropagation()}
 				onclick={toggleExpanded}
 			>
-				{expanded ? "Show less" : "Show more"}
+				<span>{expanded ? "Show less" : "Show more"}</span>
+				<span class="wb-card-expand-icon" use:icon={expanded ? "chevron-up" : "chevron-down"}></span>
 			</button>
 		{/if}
 	{/if}
