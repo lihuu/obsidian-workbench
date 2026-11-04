@@ -2,6 +2,7 @@ import { App, Modal, Notice, Platform } from "obsidian";
 import type { AgentController } from "../agent/controller";
 import type { Board, BoardAgentConfig } from "../data/types";
 import type { WorkbenchStore } from "../data/store";
+import type { WorkspaceInfo } from "../agent/types";
 import {
 	collectGitHubRefs,
 	githubRepoUrl,
@@ -818,15 +819,25 @@ export class AgentSettingsModal extends Modal {
 				if (source === "local") {
 					const path = localInput.value.trim();
 					if (path) {
-						const workspace = await this.agent.bindWorkspace(
-							this.board.id,
-							path
-						);
-						localWorkspaceKnown = true;
-						localWorkspaceIsGit = workspace.isGit;
-						localGithubRepoUrl = workspace.githubRepo
-							? githubRepoUrl(workspace.githubRepo)
-							: "";
+						let workspace: WorkspaceInfo | undefined;
+						try {
+							workspace = await this.agent.bindWorkspace(
+								this.board.id,
+								path
+							);
+							localWorkspaceKnown = true;
+							localWorkspaceIsGit = workspace.isGit;
+							localGithubRepoUrl = workspace.githubRepo
+								? githubRepoUrl(workspace.githubRepo)
+								: "";
+						} catch (validationError) {
+							console.warn(
+								"[workbench] Runner validation failed; saving workspace path locally anyway:",
+								validationError
+							);
+							await this.agent.setWorkspace(this.board.id, path);
+							localWorkspaceKnown = true;
+						}
 					} else {
 						await this.agent.clearWorkspace(this.board.id);
 						localWorkspaceKnown = true;

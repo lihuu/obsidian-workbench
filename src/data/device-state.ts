@@ -34,6 +34,7 @@ interface LocalConnectionData {
 }
 
 const CONNECTION_STORAGE_PREFIX = "workbench.runner-connection.v1";
+const WORKSPACE_STORAGE_PREFIX = "workbench.workspaces.v1";
 
 function defaultRunnerUrl(): string {
 	return Platform.isMobile ? "" : DEFAULT_RUNNER_URL;
@@ -92,13 +93,18 @@ export class PluginDeviceState {
 				Platform.isMobile
 			);
 			if (!localConnection) this.writeLocalConnection(connection);
+			const fileWorkspaces = readWorkspaces(raw?.workspaces);
+			const localWorkspaces = this.readLocalWorkspaces();
+			const mergedWorkspaces = { ...fileWorkspaces, ...localWorkspaces };
+			this.writeLocalWorkspaces(mergedWorkspaces);
 			this.cached = {
 				lastBoardId: typeof raw?.lastBoardId === "string" ? raw.lastBoardId : null,
 				workbenchOpen: raw?.workbenchOpen === true,
 				...connection,
-				workspaces: readWorkspaces(raw?.workspaces),
+				workspaces: mergedWorkspaces,
 			};
 		} catch {
+			const localWorkspaces = this.readLocalWorkspaces();
 			this.cached = {
 				lastBoardId: null,
 				workbenchOpen: false,
@@ -106,7 +112,7 @@ export class PluginDeviceState {
 				runnerToken: "",
 				cfAccessClientId: "",
 				cfAccessClientSecret: "",
-				workspaces: {},
+				workspaces: localWorkspaces,
 			};
 		}
 		return this.getSnapshot();
@@ -127,6 +133,9 @@ export class PluginDeviceState {
 				? { ...patch.workspaces }
 				: { ...this.cached.workspaces },
 		};
+		if (patch.workspaces) {
+			this.writeLocalWorkspaces(this.cached.workspaces);
+		}
 		// Runner connection fields deliberately stay out of data.json: that
 		// file is synced, while localhost/remote endpoints are per device.
 		const data = {
@@ -146,6 +155,32 @@ export class PluginDeviceState {
 
 	private getConnectionStorageKey(): string {
 		return `${CONNECTION_STORAGE_PREFIX}:${this.plugin.app.vault.getName()}`;
+	}
+
+	private getWorkspaceStorageKey(): string {
+		return `${WORKSPACE_STORAGE_PREFIX}:${this.plugin.app.vault.getName()}`;
+	}
+
+	private readLocalWorkspaces(): Record<string, string> {
+		try {
+			const raw = window.localStorage.getItem(this.getWorkspaceStorageKey());
+			if (!raw) return {};
+			const parsed: unknown = JSON.parse(raw);
+			return readWorkspaces(parsed);
+		} catch {
+			return {};
+		}
+	}
+
+	private writeLocalWorkspaces(workspaces: Record<string, string>): void {
+		try {
+			window.localStorage.setItem(
+				this.getWorkspaceStorageKey(),
+				JSON.stringify(workspaces)
+			);
+		} catch {
+			// localStorage can be unavailable in private/restricted webviews.
+		}
 	}
 
 	private readLocalConnection(): RunnerConnection | null {
