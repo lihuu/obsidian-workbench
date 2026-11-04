@@ -72,10 +72,15 @@ export class TaskDetailModal extends Modal {
 	private runStatusEl: HTMLElement | undefined;
 	private runTitleEl: HTMLElement | undefined;
 	private runArtifactsEl: HTMLElement | undefined;
+	private runDurationEl: HTMLElement | undefined;
 	private runErrorEl: HTMLElement | undefined;
 	private chatEl: HTMLElement | undefined;
 	private chatComponent: Component | undefined;
 	private chatSignature = "";
+	/** Bottom dock (composer / archived banner) pinned between the scrolling body and the footer. */
+	private dockEl: HTMLElement | undefined;
+	/** Tool-activity blocks the user expanded; survives chat re-renders. */
+	private readonly openActivityKeys = new Set<string>();
 	private messageComposerEl: HTMLElement | undefined;
 	private archivedBannerEl: HTMLElement | undefined;
 	private messageInputEl: HTMLTextAreaElement | undefined;
@@ -122,7 +127,9 @@ export class TaskDetailModal extends Modal {
 		this.modalEl.addClass("wb-task-modal");
 		this.contentEl.addClass("wb-modal-content");
 		this.contentEl.empty();
-		this.modalEl.querySelectorAll(".wb-modal-footer").forEach((el) => el.remove());
+		this.modalEl
+			.querySelectorAll(".wb-modal-footer, .wb-task-dock")
+			.forEach((el) => el.remove());
 
 		const titleField = this.contentEl.createDiv({ cls: "wb-field wb-field--title" });
 		const titleLabel = titleField.createEl("label", { cls: "wb-field-label", text: "Title" });
@@ -256,6 +263,7 @@ export class TaskDetailModal extends Modal {
 		this.renderRunSection();
 
 		const footer = this.modalEl.createDiv({ cls: "wb-modal-footer" });
+		if (this.dockEl) footer.before(this.dockEl);
 		const deleteButton = footer.createEl("button", {
 			cls: "wb-button wb-button--danger",
 			text: "Delete",
@@ -425,6 +433,8 @@ export class TaskDetailModal extends Modal {
 		});
 
 		this.runStatusEl = headerRight.createDiv({ cls: "wb-run-status" });
+		this.runDurationEl = headerRight.createSpan({ cls: "wb-run-duration" });
+		this.runDurationEl.hidden = true;
 		this.runButton = headerRight.createEl("button", {
 			cls: "wb-button wb-button--primary wb-button--small",
 			text: "Run with agent",
@@ -445,7 +455,11 @@ export class TaskDetailModal extends Modal {
 		this.chatEl.setAttr("role", "log");
 		this.chatEl.setAttr("aria-live", "polite");
 
-		this.messageComposerEl = chatBox.createDiv({ cls: "wb-chat-composer" });
+		// The composer and archived banner live in a dock outside the scrolling body
+		// (inserted before the footer in onOpen), so the conversation flows in the
+		// single modal scroller while the input stays reachable.
+		this.dockEl = createDiv({ cls: "wb-task-dock" });
+		this.messageComposerEl = this.dockEl.createDiv({ cls: "wb-chat-composer" });
 		const composerRow = this.messageComposerEl.createDiv({ cls: "wb-chat-composer-row" });
 		this.messageInputEl = composerRow.createEl("textarea", {
 			cls: "wb-input wb-chat-input",
@@ -465,7 +479,7 @@ export class TaskDetailModal extends Modal {
 		this.messageErrorEl = this.messageComposerEl.createDiv({ cls: "wb-form-error" });
 		this.messageErrorEl.hidden = true;
 
-		this.archivedBannerEl = chatBox.createDiv({ cls: "wb-chat-archived-banner" });
+		this.archivedBannerEl = this.dockEl.createDiv({ cls: "wb-chat-archived-banner" });
 		const bannerLeft = this.archivedBannerEl.createDiv({ cls: "wb-chat-archived-text" });
 		const archiveIcon = bannerLeft.createSpan({ cls: "wb-chat-archived-icon" });
 		setIcon(archiveIcon, "archive");
@@ -1000,6 +1014,7 @@ export class TaskDetailModal extends Modal {
 	private renderRunArtifacts(run: RunView | undefined, rootRun?: RunView): void {
 		if (!this.runArtifactsEl) return;
 		this.runArtifactsEl.empty();
+		this.renderRunDuration(run);
 		if (!run) {
 			this.runArtifactsEl.hidden = true;
 			return;
@@ -1085,22 +1100,18 @@ export class TaskDetailModal extends Modal {
 			}
 		}
 
-		// 3. Duration Pill
-		const duration = formatRunDuration(run.startedAt, run.endedAt);
-		if (duration) {
-			hasArtifacts = true;
-			const durPill = this.runArtifactsEl.createDiv({
-				cls: "wb-artifact-pill wb-artifact-pill--duration",
-				attr: {
-					title: run.endedAt ? `Run duration: ${duration}` : `Running for: ${duration}`,
-				},
-			});
-			const durIcon = durPill.createSpan({ cls: "wb-artifact-icon" });
-			setIcon(durIcon, "clock");
-			durPill.createSpan({ cls: "wb-artifact-label", text: duration });
-		}
-
 		this.runArtifactsEl.hidden = !hasArtifacts;
+	}
+
+	/** Duration sits inline with the run status in the header instead of taking its own row. */
+	private renderRunDuration(run: RunView | undefined): void {
+		if (!this.runDurationEl) return;
+		const duration = (run ? formatRunDuration(run.startedAt, run.endedAt) : null) ?? "";
+		this.runDurationEl.setText(duration);
+		this.runDurationEl.hidden = !duration;
+		this.runDurationEl.title = run?.endedAt
+			? `Run duration: ${duration}`
+			: `Running for: ${duration}`;
 	}
 
 	private updateChatUi(chain: RunView[], viewingHistory: boolean): void {
@@ -1118,10 +1129,18 @@ export class TaskDetailModal extends Modal {
 		].join("\n");
 		if (signature === this.chatSignature) return;
 		this.chatSignature = signature;
+		// The whole modal body is the single scroller; follow new output only when
+		// the user is already at the bottom.
+		const scroller = this.contentEl;
 		const stick =
-			this.chatEl.scrollTop + this.chatEl.clientHeight >=
-			this.chatEl.scrollHeight - 24;
+			scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 24;
+		// Hold the current height while rebuilding so the scroll position doesn't
+		// get clamped (and jump) while markdown renders.
+		this.chatEl.style.minHeight = `${this.chatEl.offsetHeight}px`;
 		this.chatEl.empty();
+		requestAnimationFrame(() => {
+			if (this.chatEl) this.chatEl.style.minHeight = "";
+		});
 
 		if (chain.length === 0) {
 			this.chatEl.createDiv({
@@ -1168,15 +1187,21 @@ export class TaskDetailModal extends Modal {
 
 			let toolLines: string[] = [];
 			let lastError = "";
+			let activityIndex = 0;
 			const flushTools = () => {
 				if (!this.chatEl || toolLines.length === 0) return;
 				const steps = parseToolSteps(toolLines);
 				const details = this.chatEl.createEl("details", {
 					cls: "wb-chat-activity",
 				});
-				if (isRunning) {
-					details.open = true;
-				}
+				// Collapsed by default so the conversation stays readable; remember
+				// what the user expanded across re-renders.
+				const activityKey = `${run.id}:${activityIndex++}`;
+				details.open = this.openActivityKeys.has(activityKey);
+				details.addEventListener("toggle", () => {
+					if (details.open) this.openActivityKeys.add(activityKey);
+					else this.openActivityKeys.delete(activityKey);
+				});
 
 				const summary = details.createEl("summary", { cls: "wb-chat-activity-summary" });
 				const summaryLeft = summary.createDiv({ cls: "wb-chat-activity-summary-left" });
@@ -1203,6 +1228,15 @@ export class TaskDetailModal extends Modal {
 
 				const summaryRight = summary.createDiv({ cls: "wb-chat-activity-summary-right" });
 				if (isAnyRunning) {
+					// While collapsed, surface the step currently executing.
+					const current = [...steps].reverse().find((s) => s.status === "running");
+					if (current) {
+						summaryLeft.createSpan({
+							cls: "wb-chat-activity-latest",
+							text: current.command || current.raw,
+							attr: { title: current.raw },
+						});
+					}
 					summaryRight.createSpan({
 						cls: "wb-chat-activity-status is-running",
 						text: "Running…",
@@ -1280,7 +1314,7 @@ export class TaskDetailModal extends Modal {
 		}
 		if (stick) {
 			requestAnimationFrame(() => {
-				if (this.chatEl) this.chatEl.scrollTop = this.chatEl.scrollHeight;
+				scroller.scrollTop = scroller.scrollHeight;
 			});
 		}
 	}
