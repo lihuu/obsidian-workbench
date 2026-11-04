@@ -114,7 +114,7 @@ export class TaskDetailModal extends Modal {
 		this.onMoveToDone = onMoveToDone;
 		this.isNew = options.isNew === true;
 		this.onDiscard = options.onDiscard;
-		this.selectedBackend = task.backend || board.agent?.backend;
+		this.selectedBackend = task.backend;
 	}
 
 	onOpen(): void {
@@ -426,6 +426,7 @@ export class TaskDetailModal extends Modal {
 		this.backendSelect = backendSelect;
 		backendSelect.addEventListener("change", () => {
 			this.selectedBackend = backendSelect.value;
+			this.task.backend = this.selectedBackend;
 			this.onSave({ backend: this.selectedBackend });
 			this.updateRunUi();
 		});
@@ -560,33 +561,52 @@ export class TaskDetailModal extends Modal {
 					];
 
 		const currentId = this.currentBackendId();
-		this.backendSelect.empty();
-		for (const backend of knownBackends) {
-			const opt = this.backendSelect.createEl("option", {
-				value: backend.id,
-				text: backend.displayName,
-			});
-			if (!backend.available) {
-				opt.text += " (unavailable)";
-			}
-		}
+		const currentOptions = Array.from(this.backendSelect.options)
+			.map((o) => o.value)
+			.join(",");
+		const targetOptions = [
+			...knownBackends.map((b) => b.id),
+			!knownBackends.some((b) => b.id === currentId) && currentId ? currentId : null,
+		]
+			.filter(Boolean)
+			.join(",");
 
-		if (currentId && !knownBackends.some((b) => b.id === currentId)) {
-			this.backendSelect.createEl("option", {
-				value: currentId,
-				text: currentId.toUpperCase(),
-			});
+		if (currentOptions !== targetOptions) {
+			this.backendSelect.empty();
+			for (const backend of knownBackends) {
+				const opt = this.backendSelect.createEl("option", {
+					value: backend.id,
+					text: backend.displayName,
+				});
+				if (!backend.available) {
+					opt.text += " (unavailable)";
+				}
+			}
+
+			if (currentId && !knownBackends.some((b) => b.id === currentId)) {
+				this.backendSelect.createEl("option", {
+					value: currentId,
+					text: currentId.toUpperCase(),
+				});
+			}
 		}
 		this.backendSelect.value = currentId;
 	}
 
+	private selectedBackendLabel(): string {
+		const id = this.currentBackendId();
+		const health = this.agent.getSnapshot().health;
+		const backend = health.backends.find((entry) => entry.id === id);
+		return backend?.displayName || (id ? id.toUpperCase() : "Agent");
+	}
+
 	private currentBackendId(): string {
+		if (this.selectedBackend) return this.selectedBackend;
+		if (this.task.backend) return this.task.backend;
 		const latest = this.agent.getRun(this.board.id, this.task.id);
 		if (latest?.backendId) return latest.backendId;
 		const health = this.agent.getSnapshot().health;
 		return (
-			this.selectedBackend ||
-			this.task.backend ||
 			this.board.agent?.backend ||
 			health.defaultBackend ||
 			"pi"
@@ -820,15 +840,16 @@ export class TaskDetailModal extends Modal {
 		const active = latest?.status === "queued" || latest?.status === "running";
 		const displayed = this.displayedRun();
 		const worktreeRemoved = Boolean(latest?.worktreeRequested && latest?.worktreeRemoved);
-		const sessionLocked = Boolean(latest && !worktreeRemoved);
-		const backendName = this.backendLabel(latest);
+		const selectedBackendId = this.currentBackendId();
+		const backendName = this.selectedBackendLabel();
+		const isSameBackend = !latest || latest.backendId === selectedBackendId;
 
 		if (this.backendSelect) {
 			this.populateBackendOptions();
-			this.backendSelect.value = latest?.backendId || this.currentBackendId();
-			this.backendSelect.disabled = sessionLocked || active || this.starting;
-			this.backendSelect.title = sessionLocked
-				? `Session is bound to ${latest?.backendName || backendName}`
+			this.backendSelect.value = selectedBackendId;
+			this.backendSelect.disabled = active || this.starting;
+			this.backendSelect.title = active
+				? "Cannot change backend while task is running"
 				: "Select execution backend for this task";
 		}
 
@@ -839,19 +860,27 @@ export class TaskDetailModal extends Modal {
 			const hasTitle = (this.titleInput?.value.trim() ?? this.task.title).length > 0;
 			const isRepeatable = (this.task as any).repeatable === true || (this.task as any).type === "recurring";
 			const canRetry = latest?.status === "failed";
-			const shouldShow = !latest || this.starting || isRepeatable || canRetry || worktreeRemoved;
+			const shouldShow =
+				!latest ||
+				this.starting ||
+				!isSameBackend ||
+				isRepeatable ||
+				canRetry ||
+				worktreeRemoved;
 			this.runButton.hidden = !shouldShow;
 			this.runButton.disabled = !workspace || active || this.starting || !hasTitle;
 			this.runButton.setText(
 				this.starting
 					? "Starting…"
-					: isRepeatable && latest
-						? "Run again"
-						: canRetry
-							? "Retry"
-							: worktreeRemoved
-								? "Start new run"
-								: `Run with ${backendName}`
+					: !isSameBackend
+						? `Run with ${backendName}`
+						: isRepeatable && latest
+							? "Run again"
+							: canRetry
+								? "Retry"
+								: worktreeRemoved
+									? "Start new run"
+									: `Run with ${backendName}`
 			);
 			this.runButton.title = !hasTitle
 				? "Title can't be empty."
