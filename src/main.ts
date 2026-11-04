@@ -1,35 +1,24 @@
 import { Notice, Plugin, TFile } from "obsidian";
-import type { CliData, CliFlags } from "obsidian";
 import { PluginDeviceState } from "./data/device-state";
 import { VaultBoardRepository } from "./data/repository";
 import { WorkbenchStore } from "./data/store";
 import { VIEW_TYPE_WORKBENCH, WorkbenchView } from "./view/WorkbenchView";
 import { AgentController } from "./agent/controller";
 import { LocalRunnerManager } from "./agent/local-runner";
-
-function cliText(value: string | "true" | undefined): string {
-	return typeof value === "string" && value !== "true" ? value : "";
-}
-
-const CLI_FLAGS: CliFlags = {
-	title: {
-		value: "<title>",
-		description: "Task title",
-		required: true,
-	},
-	board: {
-		value: "<board>",
-		description: "Board name or ID; defaults to the active board",
-	},
-	column: {
-		value: "<column>",
-		description: "Column name or ID; defaults to Inbox, Backlog, or the first column",
-	},
-	description: {
-		value: "<text>",
-		description: "Optional task description",
-	},
-};
+import {
+	CLI_FLAGS_CREATE,
+	CLI_FLAGS_LIST,
+	CLI_FLAGS_GET,
+	CLI_FLAGS_UPDATE,
+	CLI_FLAGS_MOVE,
+	CLI_FLAGS_DELETE,
+	handleCreateTask,
+	handleListTasks,
+	handleGetTask,
+	handleUpdateTask,
+	handleMoveTask,
+	handleDeleteTask,
+} from "./cli/handlers";
 
 export default class WorkbenchPlugin extends Plugin {
 	private store: WorkbenchStore | undefined;
@@ -87,11 +76,45 @@ export default class WorkbenchPlugin extends Plugin {
 		});
 
 		if (typeof this.registerCliHandler === "function") {
+			const ensureStore = () => {
+				if (!this.store) throw new Error("Workbench is not loaded.");
+				return this.store;
+			};
 			this.registerCliHandler(
 				"workbench:create-task",
 				"Create a Workbench task",
-				CLI_FLAGS,
-				(params) => this.createTaskFromCli(params)
+				CLI_FLAGS_CREATE,
+				(params) => handleCreateTask(ensureStore(), params)
+			);
+			this.registerCliHandler(
+				"workbench:list-tasks",
+				"List Workbench tasks",
+				CLI_FLAGS_LIST,
+				(params) => handleListTasks(ensureStore(), params)
+			);
+			this.registerCliHandler(
+				"workbench:get-task",
+				"Get details for a Workbench task",
+				CLI_FLAGS_GET,
+				(params) => handleGetTask(ensureStore(), params)
+			);
+			this.registerCliHandler(
+				"workbench:update-task",
+				"Update a Workbench task's title, description, backend, or column (status)",
+				CLI_FLAGS_UPDATE,
+				(params) => handleUpdateTask(ensureStore(), params)
+			);
+			this.registerCliHandler(
+				"workbench:move-task",
+				"Move a Workbench task to another column",
+				CLI_FLAGS_MOVE,
+				(params) => handleMoveTask(ensureStore(), params)
+			);
+			this.registerCliHandler(
+				"workbench:delete-task",
+				"Delete a Workbench task",
+				CLI_FLAGS_DELETE,
+				(params) => handleDeleteTask(ensureStore(), params)
 			);
 		}
 
@@ -145,66 +168,6 @@ export default class WorkbenchPlugin extends Plugin {
 		this.quitting = true;
 		this.agent?.dispose();
 		this.store?.markQuitting();
-	}
-
-	private async createTaskFromCli(params: CliData): Promise<string> {
-		const store = this.store;
-		if (!store) throw new Error("Workbench is not loaded.");
-		await store.load();
-		const snapshot = store.getSnapshot();
-		if (snapshot.loadState !== "ready") {
-			throw new Error(snapshot.loadError ?? "Workbench boards are not ready.");
-		}
-
-		const title = cliText(params.title).trim();
-		if (!title) throw new Error("title is required.");
-		const description = cliText(params.description).slice(0, 20_000);
-		const requestedBoard = cliText(params.board).trim();
-		const board = requestedBoard
-			? snapshot.boards.find(
-					(candidate) =>
-						candidate.id === requestedBoard ||
-						candidate.name.toLowerCase() === requestedBoard.toLowerCase()
-				)
-			: snapshot.boards.find((candidate) => candidate.id === snapshot.activeBoardId) ??
-				snapshot.boards[0];
-		if (!board) {
-			throw new Error(
-				requestedBoard
-					? `Board not found: ${requestedBoard}`
-					: "No Workbench board exists."
-			);
-		}
-
-		const requestedColumn = cliText(params.column).trim();
-		const column = requestedColumn
-			? board.columns.find(
-					(candidate) =>
-						candidate.id === requestedColumn ||
-						candidate.name.toLowerCase() === requestedColumn.toLowerCase()
-				)
-			: board.columns.find(
-					(candidate) => candidate.name.trim().toLowerCase() === "inbox"
-				) ??
-				board.columns.find(
-					(candidate) => candidate.name.trim().toLowerCase() === "backlog"
-				) ??
-				board.columns[0];
-		if (!column) {
-			throw new Error(
-				requestedColumn
-					? `Column not found: ${requestedColumn}`
-					: `Board has no columns: ${board.name}`
-			);
-		}
-
-		const task = store.addTask(board.id, column.id, title);
-		store.updateTask(board.id, task.id, {
-			...(description ? { description } : {}),
-			source: "agent",
-		});
-		await store.flush();
-		return `Created task ${task.id} in ${board.name} / ${column.name}: ${task.title}`;
 	}
 
 	private async createLauncherNote(): Promise<void> {

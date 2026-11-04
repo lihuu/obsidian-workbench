@@ -439,30 +439,87 @@ A proposal `key` makes retries idempotent within the run.
 
 Agents still must not edit `Workbench/boards/` directly.
 
-### Obsidian CLI entry
+### Obsidian CLI entries
 
-Any external agent or script can create a task through the official Obsidian
-CLI, without the Runner:
+Any external agent or script can create, read, update, move, or delete tasks
+through the official Obsidian CLI, without the Runner:
+
+#### 1. Create a task (`workbench:create-task`)
 
 ```bash
 obsidian workbench:create-task \
   board="Agent Integration" \
   column="Backlog" \
   title="Review generated tests" \
-  description="Created by an external agent."
+  description="Created by an external agent." \
+  backend="pi"
 ```
 
 - `title` is required.
 - `board` defaults to the active board; accepts a board name or ID.
 - `column` defaults to Inbox, then Backlog, then the first column; accepts a
   column name or ID.
+- `backend` sets the task-level execution backend (e.g. `pi`, `omp`, `opencode`).
 - The task is created through the plugin store, marked `source: "agent"`, and
   shows the Agent badge.
+
+#### 2. List tasks (`workbench:list-tasks`)
+
+```bash
+# List all tasks on active board
+obsidian workbench:list-tasks
+
+# Filter by board and column, output as JSON
+obsidian workbench:list-tasks board="Agent Integration" column="Backlog" format=json
+```
+
+- `board` defaults to active board.
+- `column` optional column filter.
+- `format` accepts `plain` (default) or `json`.
+
+#### 3. Get task details (`workbench:get-task`)
+
+```bash
+# Get details for a task
+obsidian workbench:get-task id="t_12345"
+
+# Output in JSON format
+obsidian workbench:get-task id="t_12345" format=json
+```
+
+- `id` is required. Searches all boards automatically if `board` is omitted.
+- `format` accepts `plain` (default) or `json`.
+
+#### 4. Update task or modify status (`workbench:update-task` / `workbench:move-task`)
+
+```bash
+# Update task title and description
+obsidian workbench:update-task id="t_12345" title="New title" description="Updated details"
+
+# Move task to a different column (change status)
+obsidian workbench:update-task id="t_12345" column="In Progress"
+
+# Or using workbench:move-task
+obsidian workbench:move-task id="t_12345" column="Done"
+```
+
+- `column` or `status` moves the task to the destination column and updates state.
+- `title`, `description`, `backend` update corresponding task fields.
+- `board` is optional; if omitted, automatically locates the task across all boards.
+
+#### 5. Delete a task (`workbench:delete-task`)
+
+```bash
+obsidian workbench:delete-task id="t_12345"
+```
+
+#### CLI Prerequisites & Notes
+
 - Obsidian must be running, and the Obsidian CLI must be enabled in
   **Settings → General → Command line interface**.
 - After updating the plugin, run `obsidian plugin:reload id=workbench` (or
   restart Obsidian); wait a few seconds, then verify with
-  `obsidian help workbench:create-task` so the CLI handler is registered.
+  `obsidian help workbench:create-task`.
 - This path requires Obsidian 1.12.2+ for `registerCliHandler`; the rest of the
   plugin keeps its lower minimum version.
 
@@ -471,6 +528,7 @@ Python example:
 ```python
 import subprocess
 
+# Create a task
 subprocess.run(
     [
         "obsidian",
@@ -478,6 +536,17 @@ subprocess.run(
         "board=Agent Integration",
         "title=Review generated tests",
         "description=Created by an external agent.",
+    ],
+    check=True,
+)
+
+# Move task to Done
+subprocess.run(
+    [
+        "obsidian",
+        "workbench:move-task",
+        "id=t_12345",
+        "column=Done",
     ],
     check=True,
 )
