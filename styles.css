@@ -603,7 +603,7 @@ select.wb-run-backend-select {
 
 .wb-modal.wb-task-modal {
 	width: min(720px, 94vw);
-	/* No fixed height: the modal grows with its content up to the viewport. */
+	height: min(840px, 90vh);
 	max-height: calc(100vh - 40px);
 	display: flex;
 	flex-direction: column;
@@ -624,7 +624,7 @@ select.wb-run-backend-select {
 }
 
 .wb-task-modal .wb-modal-content {
-	flex: 0 1 auto;
+	flex: 1 1 auto;
 	min-height: 0;
 	max-height: none;
 	display: flex;
@@ -718,13 +718,6 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	min-height: 180px;
 	max-height: 300px;
 	line-height: 1.55;
-}
-
-/* The fold already controls visibility; don't add a second, nested scroller. */
-.wb-task-desc-body .wb-markdown-preview {
-	min-height: 0;
-	max-height: none;
-	overflow: visible;
 }
 
 .wb-task-modal .wb-meta {
@@ -1838,55 +1831,41 @@ summary.wb-task-desc-summary::-webkit-details-marker {
 	color: var(--text-muted);
 }
 
-/* Conversation flows inline in the modal body: no frame, no own scroller. */
 .wb-task-modal .wb-chat-box {
-	display: block;
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 120px;
+	max-height: 420px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
 }
 
 .wb-task-modal .wb-chat {
-	min-height: 0;
+	flex: 1 1 auto;
+	min-height: 60px;
 	max-height: none;
-	overflow: visible;
-	padding: var(--size-4-1) 0 var(--size-4-2);
-	scrollbar-gutter: auto;
+	overflow-y: auto;
+	padding: var(--size-4-3);
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
 	background: transparent;
 	border: none;
 	border-radius: 0;
 }
 
-/* Bottom dock: composer / archived banner, pinned between body and footer. */
-.wb-task-dock {
+.wb-task-modal .wb-chat-composer {
 	flex-shrink: 0;
+	padding: var(--size-4-2) var(--size-4-3);
 	border-top: 1px solid var(--background-modifier-border);
 	background: var(--background-secondary);
-}
-
-.wb-task-dock:not(:has(> :not([hidden]))) {
-	display: none;
-}
-
-.wb-task-dock .wb-chat-composer {
-	padding: var(--size-4-2) var(--size-4-5);
-}
-
-.wb-task-dock .wb-chat-archived-banner {
-	padding: var(--size-4-2) var(--size-4-5);
-	border-top: none;
+	border-radius: 0;
 }
 
 .wb-task-modal .wb-chat-input {
 	background: var(--background-primary);
-}
-
-.wb-run-duration {
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-	font-variant-numeric: tabular-nums;
-	white-space: nowrap;
-}
-
-.wb-run-duration[hidden] {
-	display: none;
 }
 
 .wb-chat-archived-banner {
@@ -2175,19 +2154,6 @@ summary.wb-chat-activity-summary::-webkit-details-marker {
 	display: flex;
 	align-items: center;
 	gap: var(--size-4-2);
-	flex: 1 1 auto;
-	min-width: 0;
-}
-
-.wb-chat-activity-latest {
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	color: var(--text-faint);
-	font-family: var(--font-monospace-theme, var(--font-monospace));
-	font-size: 11px;
 }
 
 .wb-chat-activity-chevron {
@@ -2256,6 +2222,10 @@ summary.wb-chat-activity-summary::-webkit-details-marker {
 	display: flex;
 	flex-direction: column;
 	background: var(--background-primary);
+	max-height: 220px;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
 }
 
 .wb-tool-step {
