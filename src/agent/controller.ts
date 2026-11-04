@@ -683,7 +683,7 @@ export class AgentController implements Readable<AgentSnapshot> {
 			title: task.title,
 			prompt: context.prompt,
 			cwd: workspace,
-			backend: board.agent?.backend,
+			backend: task.backend || board.agent?.backend,
 			images: context.images,
 			worktree: board.agent?.worktree === true,
 		});

@@ -343,10 +343,11 @@ export class WorkbenchStore implements Readable<WorkbenchSnapshot> {
 	}
 
 	addTask(boardId: string, columnId: string, title: string): Task {
+		const trimmedTitle = title.trim();
 		const now = Date.now();
 		const task: Task = {
 			id: createId("t"),
-			title: title.trim(),
+			title: trimmedTitle || "Untitled task",
 			description: "",
 			createdAt: now,
 			updatedAt: now,
@@ -369,6 +370,15 @@ export class WorkbenchStore implements Readable<WorkbenchSnapshot> {
 
 	updateTask(boardId: string, taskId: string, patch: TaskPatch): void {
 		const now = Date.now();
+		const sanitizedPatch = { ...patch };
+		if (sanitizedPatch.title !== undefined) {
+			const trimmedTitle = sanitizedPatch.title.trim();
+			if (!trimmedTitle) {
+				delete sanitizedPatch.title;
+			} else {
+				sanitizedPatch.title = trimmedTitle;
+			}
+		}
 		this.updateBoard(
 			boardId,
 			(board) => ({
@@ -377,7 +387,7 @@ export class WorkbenchStore implements Readable<WorkbenchSnapshot> {
 				columns: board.columns.map((column) => ({
 					...column,
 					tasks: column.tasks.map((task) =>
-						task.id === taskId ? { ...task, ...patch, updatedAt: now } : task
+						task.id === taskId ? { ...task, ...sanitizedPatch, updatedAt: now } : task
 					),
 				})),
 			}),

@@ -133,6 +133,9 @@ function parseTask(value: unknown, path: string): Task {
 			? { sourceTaskId: value.sourceTaskId.trim() }
 			: {}),
 		...(github ? { github } : {}),
+		...(typeof value.backend === "string" && value.backend.trim()
+			? { backend: value.backend.trim() }
+			: {}),
 	};
 }
 
@@ -329,6 +332,7 @@ export function serializeBoard(board: Board): string {
 					...(task.sourceRunId ? { sourceRunId: task.sourceRunId } : {}),
 					...(task.sourceTaskId ? { sourceTaskId: task.sourceTaskId } : {}),
 					...(task.github ? { github: { ...task.github } } : {}),
+					...(task.backend ? { backend: task.backend } : {}),
 				})),
 		})),
 	};

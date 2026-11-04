@@ -33,6 +33,8 @@ export interface Task {
 	sourceRunId?: string;
 	sourceTaskId?: string;
 	github?: TaskGitHubLink;
+	/** Optional task-level execution backend; defaults to board/runner default. */
+	backend?: string;
 	/** Added by svelte-dnd-action while a drag is in progress. */
 	isDndShadowItem?: boolean;
 }
@@ -97,5 +99,6 @@ export type TaskPatch = Partial<
 		| "sourceRunId"
 		| "sourceTaskId"
 		| "github"
+		| "backend"
 	>
 >;
