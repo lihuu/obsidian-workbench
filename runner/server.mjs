@@ -52,7 +52,7 @@ const ALLOWED_ROOTS = (process.env.WORKBENCH_ALLOWED_ROOTS ?? "")
 	});
 const RUNS_DIR =
 	process.env.WORKBENCH_RUNS_DIR ?? path.join(os.homedir(), ".workbench", "runs");
-const RUN_TIMEOUT_MS = Number(process.env.WORKBENCH_RUN_TIMEOUT_MS ?? 30 * 60 * 1000);
+const RUN_TIMEOUT_MS = Number(process.env.WORKBENCH_RUN_TIMEOUT_MS ?? 60 * 60 * 1000);
 const MAX_PROMPT_CHARS = 200_000;
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
 const MAX_IMAGES = 4;

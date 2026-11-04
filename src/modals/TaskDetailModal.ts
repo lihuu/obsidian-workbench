@@ -634,11 +634,21 @@ export class TaskDetailModal extends Modal {
 			if (Object.keys(patch).length > 0) {
 				this.onSave(patch);
 			}
-			const run = await this.agent.startRun(
-				this.board,
-				{ ...this.task, title, description, backend }
-			);
-			this.onRunState(run);
+			const latest = this.agent.getRun(this.board.id, this.task.id);
+			const isSameBackend = !latest || latest.backendId === backend;
+			if (latest?.status === "failed" && runCanContinue(latest) && isSameBackend) {
+				const promptMsg = latest.error?.includes("timed out")
+					? "The run timed out. Please resume and continue where you left off to complete the task."
+					: "Please continue and complete the remaining steps of this task.";
+				const run = await this.agent.continueRun(this.board.id, this.task.id, promptMsg);
+				this.onRunState(run);
+			} else {
+				const run = await this.agent.startRun(
+					this.board,
+					{ ...this.task, title, description, backend }
+				);
+				this.onRunState(run);
+			}
 			this.detailError = "";
 		} catch (error) {
 			this.runErrorEl?.setText(error instanceof Error ? error.message : String(error));
@@ -869,6 +879,7 @@ export class TaskDetailModal extends Modal {
 				worktreeRemoved;
 			this.runButton.hidden = !shouldShow;
 			this.runButton.disabled = !workspace || active || this.starting || !hasTitle;
+			const canResume = canRetry && runCanContinue(latest) && isSameBackend;
 			this.runButton.setText(
 				this.starting
 					? "Starting…"
@@ -876,17 +887,21 @@ export class TaskDetailModal extends Modal {
 						? `Run with ${backendName}`
 						: isRepeatable && latest
 							? "Run again"
-							: canRetry
-								? "Retry"
-								: worktreeRemoved
-									? "Start new run"
-									: `Run with ${backendName}`
+							: canResume
+								? "Resume & Retry"
+								: canRetry
+									? "Retry"
+									: worktreeRemoved
+										? "Start new run"
+										: `Run with ${backendName}`
 			);
 			this.runButton.title = !hasTitle
 				? "Title can't be empty."
-				: workspace
-					? ""
-					: "Set a local workspace in the board header first.";
+				: !workspace
+					? "Set a local workspace in the board header first."
+					: canResume
+						? "Resume the previous session and continue execution"
+						: "";
 		}
 		if (this.abortButton) {
 			this.abortButton.hidden = !active;

@@ -134,6 +134,8 @@ export class LocalRunnerManager {
 		process.env.WORKBENCH_RUNNER_HOST = host;
 		process.env.WORKBENCH_RUNNER_PORT = port;
 		process.env.WORKBENCH_RUNNER_TOKEN = settings.runnerToken.trim();
+		process.env.WORKBENCH_RUN_TIMEOUT_MS =
+			process.env.WORKBENCH_RUN_TIMEOUT_MS || String(60 * 60 * 1000);
 		this.augmentPath();
 
 		const resolved = nodeRequire.resolve?.(runnerPath) ?? runnerPath;
