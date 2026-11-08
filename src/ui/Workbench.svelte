@@ -14,10 +14,12 @@
 	import type { AgentSnapshot, RunView, TaskProposal } from "../agent/types";
 	import { isLoopbackRunnerUrl } from "../agent/runner-connection";
 	import {
+		isTaskAutoRunnable,
 		targetColumnIdForStatus,
 		tasksEnteringColumn,
 		tasksLeavingColumn,
 	} from "../agent/run-columns";
+	import { createId } from "../util/id";
 	import type { Board as BoardModel, Column, Task } from "../data/types";
 	import { WorkbenchStore, createInitialSnapshot, type WorkbenchSnapshot } from "../data/store";
 	import BoardView from "./Board.svelte";
@@ -208,6 +210,7 @@
 		}
 		for (const task of queueColumn.tasks) {
 			if (task.isDndShadowItem || baseline.ids.has(task.id)) continue;
+			if (!isTaskAutoRunnable(task)) continue;
 			baseline.ids.add(task.id);
 			const existing = agent.getRun(board.id, task.id);
 			if (existing && (existing.status === "queued" || existing.status === "running")) {
@@ -227,6 +230,14 @@
 	});
 
 	function warnRunningColumnMoves(board: BoardModel, columns: Column[]): void {
+		const queueColumnId = board.agent?.runStateMapping?.queuedColumnId;
+		if (queueColumnId) {
+			for (const task of tasksEnteringColumn(board, columns, queueColumnId)) {
+				if (!isTaskAutoRunnable(task)) {
+					new Notice("Task title is required before it can be enqueued.");
+				}
+			}
+		}
 		const runningColumnId = board.agent?.runStateMapping?.runningColumnId;
 		if (!runningColumnId) return;
 		for (const task of tasksEnteringColumn(board, columns, runningColumnId)) {
@@ -324,7 +335,7 @@
 		return `${workspace} · ${runner}${available ? ` · ${available}` : ""}`;
 	}
 
-	function openTask(task: Task, isNew = false) {
+	function openTask(task: Task) {
 		if (!activeBoard) return;
 		const board = activeBoard;
 		new TaskDetailModal(
@@ -355,20 +366,73 @@
 						(column) => column.name.trim().toLowerCase() === "done"
 					) ?? board.columns[board.columns.length - 1];
 				if (done) store.moveTask(board.id, task.id, done.id);
-			},
-			isNew
-				? {
-						isNew: true,
-						onDiscard: () => store.deleteTask(board.id, task.id),
-					}
-				: undefined
+			}
 		).open();
 	}
 
 	function addTask(columnId: string) {
 		if (!activeBoard) return;
-		const task = store.addTask(activeBoard.id, columnId, "");
-		openTask(task, true);
+		const board = activeBoard;
+		const now = Date.now();
+		const draftTask: Task = {
+			id: createId("t"),
+			title: "",
+			description: "",
+			createdAt: now,
+			updatedAt: now,
+		};
+		let persisted = false;
+		new TaskDetailModal(
+			app,
+			draftTask,
+			board,
+			agent,
+			(patch) => {
+				if (!persisted) {
+					persisted = true;
+					store.addTask(board.id, columnId, patch.title?.trim() || "Untitled task", {
+						id: draftTask.id,
+						description: patch.description ?? draftTask.description,
+						backend: patch.backend ?? draftTask.backend,
+					});
+				} else {
+					store.updateTask(board.id, draftTask.id, patch);
+				}
+			},
+			async () => {
+				if (persisted) {
+					const run = agent.getRun(board.id, draftTask.id);
+					if (run && (run.status === "queued" || run.status === "running")) {
+						try {
+							await agent.abortRun(board.id, draftTask.id);
+						} catch (error) {
+							new Notice(
+								`Couldn't stop the run before deleting: ${
+									error instanceof Error ? error.message : String(error)
+								}`
+							);
+						}
+					}
+					store.deleteTask(board.id, draftTask.id);
+				}
+			},
+			(run) => moveTaskForRun(board, run),
+			() => {
+				if (persisted) {
+					const done =
+						board.columns.find(
+							(column) => column.name.trim().toLowerCase() === "done"
+						) ?? board.columns[board.columns.length - 1];
+					if (done) store.moveTask(board.id, draftTask.id, done.id);
+				}
+			},
+			{
+				isNew: true,
+				onDiscard: () => {
+					// Draft was never persisted to the store, nothing to clean up.
+				},
+			}
+		).open();
 	}
 
 	function handleConsider(columnId: string, event: CustomEvent<DndEvent<Task>>) {

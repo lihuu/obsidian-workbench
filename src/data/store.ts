@@ -342,13 +342,19 @@ export class WorkbenchStore implements Readable<WorkbenchSnapshot> {
 		);
 	}
 
-	addTask(boardId: string, columnId: string, title: string): Task {
+	addTask(
+		boardId: string,
+		columnId: string,
+		title: string,
+		options: { id?: string; description?: string; backend?: string } = {}
+	): Task {
 		const trimmedTitle = title.trim();
 		const now = Date.now();
 		const task: Task = {
-			id: createId("t"),
+			id: options.id || createId("t"),
 			title: trimmedTitle || "Untitled task",
-			description: "",
+			description: options.description ?? "",
+			...(options.backend ? { backend: options.backend } : {}),
 			createdAt: now,
 			updatedAt: now,
 		};
