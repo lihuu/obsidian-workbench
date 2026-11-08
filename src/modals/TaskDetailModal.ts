@@ -48,8 +48,9 @@ export class TaskDetailModal extends Modal {
 	private readonly onDelete: () => Promise<void> | void;
 	private readonly onRunState: (run: RunView) => void;
 	private readonly onMoveToDone: () => void;
-	private readonly isNew: boolean;
+	private isNew: boolean;
 	private readonly onDiscard?: () => void;
+	private saved = false;
 	private deleteArmed = false;
 	private deleteTimer: number | undefined;
 	private allowClose = false;
@@ -129,7 +130,7 @@ export class TaskDetailModal extends Modal {
 		const titleLabel = titleField.createEl("label", { cls: "wb-field-label", text: "Title" });
 		const titleInput = titleField.createEl("input", { cls: "wb-input wb-title-input" });
 		titleInput.type = "text";
-		titleInput.value = this.task.title;
+		titleInput.value = this.isNew && this.task.title === "Untitled task" ? "" : this.task.title;
 		titleInput.placeholder = "Task title";
 		this.titleInput = titleInput;
 		titleInput.id = `wb-task-title-${this.task.id}`;
@@ -269,6 +270,12 @@ export class TaskDetailModal extends Modal {
 		});
 		this.saveButton = saveButton;
 
+		if (this.isNew) {
+			deleteButton.style.display = "none";
+			cancelButton.setText("Cancel");
+			saveButton.setText("Create task");
+		}
+
 		titleInput.addEventListener("keydown", (event) => {
 			if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229) {
 				event.preventDefault();
@@ -276,6 +283,7 @@ export class TaskDetailModal extends Modal {
 					this.titleInput?.focus();
 					return;
 				}
+				this.saved = true;
 				this.close();
 			}
 		});
@@ -298,12 +306,21 @@ export class TaskDetailModal extends Modal {
 			super.close();
 		});
 
-		cancelButton.addEventListener("click", () => this.close());
+		cancelButton.addEventListener("click", () => {
+			if (this.isNew) {
+				this.onDiscard?.();
+				this.allowClose = true;
+				super.close();
+				return;
+			}
+			this.close();
+		});
 		saveButton.addEventListener("click", () => {
 			if (!this.updateTitleValidation()) {
 				this.titleInput?.focus();
 				return;
 			}
+			this.saved = true;
 			this.close();
 		});
 
@@ -627,13 +644,20 @@ export class TaskDetailModal extends Modal {
 		const description = this.currentDescription();
 		const backend = this.currentBackendId();
 		try {
+			if (this.isNew) {
+				this.saved = true;
+				this.isNew = false;
+			}
 			const patch: TaskPatch = {};
 			if (title !== this.task.title) patch.title = title;
 			if (description !== this.task.description) patch.description = description;
 			if (backend !== this.task.backend) patch.backend = backend;
-			if (Object.keys(patch).length > 0) {
+			if (Object.keys(patch).length > 0 || this.saved) {
 				this.onSave(patch);
 			}
+			this.task.title = title;
+			this.task.description = description;
+			if (backend) this.task.backend = backend;
 			const latest = this.agent.getRun(this.board.id, this.task.id);
 			const isSameBackend = !latest || latest.backendId === backend;
 			if (latest?.status === "failed" && runCanContinue(latest) && isSameBackend) {
@@ -1439,6 +1463,12 @@ export class TaskDetailModal extends Modal {
 			super.close();
 			return;
 		}
+		if (this.isNew && !this.saved) {
+			this.onDiscard?.();
+			this.allowClose = true;
+			super.close();
+			return;
+		}
 		const title = this.titleInput?.value.trim() ?? "";
 		if (!title) {
 			if (this.isNew) {
@@ -1454,7 +1484,7 @@ export class TaskDetailModal extends Modal {
 		if (title !== this.task.title) patch.title = title;
 		if (description !== this.task.description) patch.description = description;
 		if (backend !== undefined && backend !== this.task.backend) patch.backend = backend;
-		if (Object.keys(patch).length > 0) {
+		if (Object.keys(patch).length > 0 || (this.isNew && this.saved)) {
 			this.onSave(patch);
 		}
 		this.allowClose = true;
