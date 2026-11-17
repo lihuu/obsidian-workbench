@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	isTaskAutoRunnable,
 	targetColumnIdForStatus,
 	tasksEnteringColumn,
 	tasksLeavingColumn,
@@ -104,3 +105,38 @@ describe("tasksLeavingColumn", () => {
 		]);
 	});
 });
+
+describe("isTaskAutoRunnable", () => {
+	it("rejects empty or whitespace-only titles", () => {
+		expect(isTaskAutoRunnable({ ...task("t1"), title: "" })).toBe(false);
+		expect(isTaskAutoRunnable({ ...task("t2"), title: "   " })).toBe(false);
+	});
+
+	it("rejects untitled task when description is missing or blank", () => {
+		expect(isTaskAutoRunnable({ ...task("t1"), title: "Untitled task", description: "" })).toBe(false);
+		expect(isTaskAutoRunnable({ ...task("t2"), title: "untitled task", description: "   " })).toBe(false);
+		expect(isTaskAutoRunnable({ ...task("t3"), title: "UNTITLED TASK" })).toBe(false);
+	});
+
+	it("accepts untitled task when a non-empty description is provided", () => {
+		expect(
+			isTaskAutoRunnable({
+				...task("t1"),
+				title: "Untitled task",
+				description: "Investigate crash log",
+			})
+		).toBe(true);
+	});
+
+	it("accepts meaningful task titles with or without description", () => {
+		expect(isTaskAutoRunnable({ ...task("t1"), title: "Fix login button", description: "" })).toBe(true);
+		expect(
+			isTaskAutoRunnable({
+				...task("t2"),
+				title: "Fix login button",
+				description: "details here",
+			})
+		).toBe(true);
+	});
+});
+

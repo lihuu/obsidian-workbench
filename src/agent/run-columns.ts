@@ -48,3 +48,18 @@ export function tasksLeavingColumn(
 			?.tasks.filter((task) => !task.isDndShadowItem && !afterIds.has(task.id)) ?? []
 	);
 }
+
+/**
+ * Return whether a task has sufficient information to be automatically enqueued
+ * by the runner when placed into a queue column. Empty titles or untitled tasks
+ * with no description must not auto-run.
+ */
+export function isTaskAutoRunnable(task: Task): boolean {
+	const title = task.title.trim();
+	if (!title) return false;
+	if (title.toLowerCase() === "untitled task" && !task.description?.trim()) {
+		return false;
+	}
+	return true;
+}
+
